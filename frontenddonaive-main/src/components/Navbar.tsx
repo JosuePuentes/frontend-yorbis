@@ -265,7 +265,7 @@ const Navbar = () => {
     };
 
     const handleWhatsAppContact = () => {
-        const phoneNumber = '584146772709';
+        const phoneNumber = '584146428857';
         const message = 'Hola! Me interesa conocer más sobre los productos de Ferrería Los Puentes.';
         const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
