@@ -266,23 +266,23 @@ const Navbar = () => {
 
     const handleWhatsAppContact = () => {
         const phoneNumber = '584146772709';
-        const message = 'Hola! Me interesa conocer más sobre los servicios de Donaive.';
+        const message = 'Hola! Me interesa conocer más sobre los productos de Ferrería Los Puentes.';
         const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
     };
 
     return (
-        <nav className="bg-gradient-to-r from-slate-900 via-blue-900 to-indigo-900 text-white shadow-lg px-4 py-2 sticky top-0 z-50">
+        <nav className="bg-gradient-to-r from-blue-600 via-blue-500 to-yellow-400 text-white shadow-lg px-4 py-2 sticky top-0 z-50">
             <div className="flex justify-between items-center max-w-7xl mx-auto">
                 {/* Logo / Brand Name */}
-                <Link to="/" className="text-xl font-bold tracking-wide flex flex-col items-start gap-1 text-white hover:text-blue-300 transition-colors duration-200 ml-4">
+                <Link to="/" className="text-xl font-bold tracking-wide flex flex-col items-start gap-1 text-white hover:text-yellow-200 transition-colors duration-200 ml-4">
                     <div className="flex items-center gap-3">
                         <img 
                             src="/logo.png" 
-                            alt="Donaive Logo" 
+                            alt="Ferrería Los Puentes Logo" 
                             className="h-12 w-12 object-contain"
                         />
-                        <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">DONAIVE</span>
+                        <span className="bg-gradient-to-r from-yellow-300 to-yellow-500 bg-clip-text text-transparent font-bold">Ferrería Los Puentes</span>
                     </div>
                 </Link>
 
