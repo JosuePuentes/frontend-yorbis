@@ -286,17 +286,19 @@ const Navbar = () => {
         
         // Verificar cada categoría
         allLinks.forEach(category => {
-            const accessibleItems = category.items.filter(link => !link.permiso || permisosUsuario.includes(link.permiso));
+            const accessibleItems = category.items.filter(link => !link.permiso || tienePermiso(permisosUsuario, link.permiso));
             if (accessibleItems.length > 0) {
                 console.log(`✅ ${category.category}: ${accessibleItems.length} items accesibles`);
                 accessibleItems.forEach(item => {
-                    console.log(`   - ${item.label} (requiere: ${item.permiso || 'ninguno'})`);
+                    const permisoStr = Array.isArray(item.permiso) ? item.permiso.join(' o ') : (item.permiso || 'ninguno');
+                    console.log(`   - ${item.label} (requiere: ${permisoStr})`);
                 });
             } else {
                 console.log(`❌ ${category.category}: 0 items accesibles`);
                 category.items.forEach(item => {
-                    const tienePermiso = !item.permiso || permisosUsuario.includes(item.permiso);
-                    console.log(`   - ${item.label}: ${tienePermiso ? '✅' : '❌'} (requiere: ${item.permiso || 'ninguno'})`);
+                    const tieneElPermiso = !item.permiso || tienePermiso(permisosUsuario, item.permiso);
+                    const permisoStr = Array.isArray(item.permiso) ? item.permiso.join(' o ') : (item.permiso || 'ninguno');
+                    console.log(`   - ${item.label}: ${tieneElPermiso ? '✅' : '❌'} (requiere: ${permisoStr})`);
                 });
             }
         });
