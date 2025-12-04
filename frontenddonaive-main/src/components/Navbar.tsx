@@ -4,40 +4,55 @@ import { Menu, X, ChevronDown, LogOut, Home, BarChart, DollarSign, Users, Phone,
 import { motion } from 'framer-motion';
 import { fetchWithAuth } from '@/lib/api';
 
+// Función helper para verificar si un usuario tiene un permiso o permisos relacionados
+const tienePermiso = (permisos: string[], permisoRequerido: string | string[]): boolean => {
+    // Si tiene acceso total, permitir todo
+    if (permisos.some(p => p === 'admin' || p === 'super_admin' || p === 'acceso_total' || p === 'acceso_admin')) {
+        return true;
+    }
+    
+    // Si permisoRequerido es un array, verificar si tiene alguno
+    if (Array.isArray(permisoRequerido)) {
+        return permisoRequerido.some(p => permisos.includes(p));
+    }
+    
+    return permisos.includes(permisoRequerido);
+};
+
 // Permisos y enlaces agrupados para una mejor organización visual
 const allLinks = [
     {
         category: 'Resumen',
         icon: BarChart,
         items: [
-            { to: '/gastoscxc-cuadres', label: 'Gastos, Cuentas y Cuadres', permiso: 'agregar_cuadre' },
-            { to: '/resumendeventa', label: 'Resumen de Ventas', permiso: 'ver_resumen_mensual' },
-            { to: '/ventatotal', label: 'Venta Total', permiso: 'ver_ventas_totales' },
-            { to: '/metas', label: 'Metas', permiso: 'ver_about' },
-            { to: '/gestionmetas', label: 'Crear Meta', permiso: 'metas' },
-            { to: '/metasconf', label: 'Metas Configuración', permiso: 'ver_about' },
+            { to: '/gastoscxc-cuadres', label: 'Gastos, Cuentas y Cuadres', permiso: ['agregar_cuadre', 'ver_cuadres', 'ver_gastos', 'ver_cuentas_por_pagar'] },
+            { to: '/resumendeventa', label: 'Resumen de Ventas', permiso: ['ver_resumen_mensual', 'ver_ventas', 'ver_inicio'] },
+            { to: '/ventatotal', label: 'Venta Total', permiso: ['ver_ventas_totales', 'ver_ventas'] },
+            { to: '/metas', label: 'Metas', permiso: ['ver_about', 'ver_metas'] },
+            { to: '/gestionmetas', label: 'Crear Meta', permiso: ['metas', 'agregar_meta', 'editar_meta'] },
+            { to: '/metasconf', label: 'Metas Configuración', permiso: ['ver_about', 'ver_metas', 'editar_meta'] },
         ]
     },
     {
         category: 'Cuadres',
         icon: BarChart,
         items: [
-            { to: '/agregarcuadre', label: 'Agregar Cuadre', permiso: 'agregar_cuadre' },
-            { to: '/cuadresporfarmacia', label: 'Mis Cuadres', permiso: 'agregar_cuadre' },
-            { to: '/verificacion-cuadres', label: 'Verificación Cuadres', permiso: 'verificar_cuadres' },
-            { to: '/ver-cuadres-dia', label: 'Cuadres por Día', permiso: 'ver_cuadres_dia' },
-            { to: '/visualizarcuadres', label: 'Visualizar Cuadres', permiso: 'ver_cuadres_dia' },
-            { to: '/modificar-cuadre', label: 'Modificar Cuadre', permiso: 'modificar_cuadre' },
+            { to: '/agregarcuadre', label: 'Agregar Cuadre', permiso: ['agregar_cuadre'] },
+            { to: '/cuadresporfarmacia', label: 'Mis Cuadres', permiso: ['agregar_cuadre', 'ver_cuadres'] },
+            { to: '/verificacion-cuadres', label: 'Verificación Cuadres', permiso: ['verificar_cuadres', 'aprobar_cuadre', 'rechazar_cuadre'] },
+            { to: '/ver-cuadres-dia', label: 'Cuadres por Día', permiso: ['ver_cuadres_dia', 'ver_cuadres'] },
+            { to: '/visualizarcuadres', label: 'Visualizar Cuadres', permiso: ['ver_cuadres_dia', 'ver_cuadres'] },
+            { to: '/modificar-cuadre', label: 'Modificar Cuadre', permiso: ['modificar_cuadre', 'editar_cuadre'] },
         ]
     },
     {
         category: 'Gastos',
         icon: DollarSign,
         items: [
-            { to: '/agregargastos', label: 'Agregar Gasto', permiso: 'agregar_cuadre' },
-            { to: '/gastosporusuario', label: 'Mis Gastos', permiso: 'agregar_cuadre' },
-            { to: '/verificaciongastos', label: 'Verificación Gastos', permiso: 'verificar_gastos' },
-            { to: '/vergastos', label: 'Ver Gastos (Admin)', permiso: 'verificar_gastos' },
+            { to: '/agregargastos', label: 'Agregar Gasto', permiso: ['agregar_cuadre', 'agregar_gasto'] },
+            { to: '/gastosporusuario', label: 'Mis Gastos', permiso: ['agregar_cuadre', 'ver_gastos'] },
+            { to: '/verificaciongastos', label: 'Verificación Gastos', permiso: ['verificar_gastos', 'aprobar_gasto', 'rechazar_gasto'] },
+            { to: '/vergastos', label: 'Ver Gastos (Admin)', permiso: ['verificar_gastos', 'ver_gastos'] },
         ]
     },
     
@@ -45,28 +60,28 @@ const allLinks = [
         category: 'RRHH',
         icon: Users,
         items: [
-            { to: '/cajeros', label: 'Vendedores', permiso: 'cajeros' },
-            { to: '/comisiones', label: 'Comisiones Por Turno', permiso: 'comisiones' },
-            { to: '/comisionesgenerales', label: 'Comisiones Generales', permiso: 'comisiones' },
+            { to: '/cajeros', label: 'Vendedores', permiso: ['cajeros', 'ver_cajeros'] },
+            { to: '/comisiones', label: 'Comisiones Por Turno', permiso: ['comisiones'] },
+            { to: '/comisionesgenerales', label: 'Comisiones Generales', permiso: ['comisiones'] },
         ]
     },
     {
         category: 'Administración',
         icon: Users,
         items: [
-            { to: '/register', label: 'Agregar Usuario', permiso: 'acceso_admin' },
-            { to: '/modificar-usuarios', label: 'Modificación de Usuario', permiso: 'acceso_admin' },
-            { to: '/valesporfarmacia', label: 'Vales por Negocio', permiso: 'ver_cuadres_dia' },
-            { to: '/agregarinventariocosto', label: 'Agregar Costo Inv', permiso: 'acceso_admin' },
-            { to: '/verinventarios', label: 'Ver Inventarios', permiso: 'acceso_admin' },
+            { to: '/register', label: 'Agregar Usuario', permiso: ['acceso_admin', 'agregar_usuario'] },
+            { to: '/modificar-usuarios', label: 'Modificación de Usuario', permiso: ['acceso_admin', 'editar_usuario', 'editar_permisos_usuario'] },
+            { to: '/valesporfarmacia', label: 'Vales por Negocio', permiso: ['ver_cuadres_dia', 'ver_cuadres'] },
+            { to: '/agregarinventariocosto', label: 'Agregar Costo Inv', permiso: ['acceso_admin', 'agregar_inventario'] },
+            { to: '/verinventarios', label: 'Ver Inventarios', permiso: ['acceso_admin', 'ver_inventarios'] },
         ]
     },
     {
         category: 'Compras',
         icon: ShoppingCart,
         items: [
-            { to: '/compras', label: 'Módulo de Compras', permiso: 'compras' },
-            { to: '/cuentas-por-pagar-compras', label: 'Cuentas por Pagar', permiso: 'compras' },
+            { to: '/compras', label: 'Módulo de Compras', permiso: ['compras', 'ver_compras'] },
+            { to: '/cuentas-por-pagar-compras', label: 'Cuentas por Pagar', permiso: ['compras', 'ver_cuentas_por_pagar'] },
         ]
     },
     
@@ -74,28 +89,28 @@ const allLinks = [
         category: 'Ventas',
         icon: ShoppingCart,
         items: [
-            { to: '/punto-venta', label: 'Punto de Venta', permiso: 'punto_venta' },
+            { to: '/punto-venta', label: 'Punto de Venta', permiso: ['punto_venta', 'agregar_venta', 'ver_ventas'] },
         ]
     },
     {
         category: 'Clientes',
         icon: Users,
         items: [
-            { to: '/clientes', label: 'Gestión de Clientes', permiso: 'gestionar_clientes' },
+            { to: '/clientes', label: 'Gestión de Clientes', permiso: ['gestionar_clientes', 'ver_clientes'] },
         ]
     },
     {
         category: 'Bancos',
         icon: DollarSign,
         items: [
-            { to: '/bancos', label: 'Gestión de Bancos', permiso: 'gestionar_bancos' },
+            { to: '/bancos', label: 'Gestión de Bancos', permiso: ['gestionar_bancos', 'ver_bancos'] },
         ]
     },
     {
         category: 'Inicio',
         icon: Home,
         items: [
-            { to: '/admin', label: 'Dashboard', permiso: 'acceso_admin' },
+            { to: '/admin', label: 'Dashboard', permiso: ['acceso_admin', 'admin', 'super_admin'] },
         ]
     },
 ];
@@ -247,7 +262,12 @@ const Navbar = () => {
     const accessibleLinks = permisosUsuario.length > 0
         ? allLinks.map(category => ({
             ...category,
-            items: category.items.filter(link => !link.permiso || permisosUsuario.includes(link.permiso))
+            items: category.items.filter(link => {
+                // Si no requiere permiso, mostrar siempre
+                if (!link.permiso) return true;
+                // Usar la función helper para verificar permisos
+                return tienePermiso(permisosUsuario, link.permiso);
+            })
         })).filter(category => category.items.length > 0)
         : [];
 
