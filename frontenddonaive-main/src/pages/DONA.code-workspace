@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"name": "rapifarma-backend",
+			"path": "../../../rapifarma-backend"
+		}
+	],
+	"settings": {}
+}

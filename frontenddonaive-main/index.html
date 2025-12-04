@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/logo.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <title>DONAIVE</title>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+
+<body>
+  <div id="root"></div>
+  <!-- Suprimir warnings del navegador sobre APIs deprecadas y preload -->
+  <script>
+    // Interceptar warnings ANTES de que se muestren en la consola
+    (function() {
+      const originalWarn = console.warn;
+      const originalError = console.error;
+      
+      // Función para detectar si un mensaje debe ser filtrado (warnings de navegador)
+      function shouldFilterWarnings(message) {
+        const msg = String(message).toLowerCase();
+        return (
+          msg.includes('deprecated api') ||
+          msg.includes('entry type') ||
+          (msg.includes('preload') && (msg.includes('not used') || msg.includes('was preloaded'))) ||
+          msg.includes('resource was preloaded') ||
+          msg.includes('preloaded using link preload')
+        );
+      }
+      
+      // Función para detectar errores 404 de servicios externos
+      function shouldFilter404(message) {
+        const msg = String(message);
+        return (
+          ((msg.includes('/api/v1/projects/') || msg.includes('rapifarma-frontend')) && 
+           (msg.includes('404') || msg.includes('Failed to load resource'))) ||
+          (msg.includes('rolling-release') && msg.includes('404'))
+        );
+      }
+      
+      // Interceptar console.warn
+      console.warn = function(...args) {
+        const message = args.map(arg => String(arg)).join(' ');
+        if (shouldFilterWarnings(message)) {
+          return; // No mostrar este warning
+        }
+        originalWarn.apply(console, args);
+      };
+      
+      // Interceptar console.error (warnings y errores 404 externos)
+      console.error = function(...args) {
+        const message = args.map(arg => String(arg)).join(' ');
+        if (shouldFilterWarnings(message) || shouldFilter404(message)) {
+          return; // No mostrar este error/warning
+        }
+        originalError.apply(console, args);
+      };
+      
+      // Suprimir warnings de Performance API deprecada
+      if ('PerformanceObserver' in window) {
+        try {
+          const originalPerformanceObserver = window.PerformanceObserver;
+          window.PerformanceObserver = function(...args) {
+            try {
+              return new originalPerformanceObserver(...args);
+            } catch (e) {
+              // Silenciar errores de Performance Observer deprecado
+              return null;
+            }
+          };
+        } catch (e) {
+          // Ignorar errores
+        }
+      }
+    })();
+  </script>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>

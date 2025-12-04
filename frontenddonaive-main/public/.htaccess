@@ -1,0 +1,27 @@
+# Configuración para SPA (Single Page Application)
+RewriteEngine On
+
+# Manejar archivos estáticos
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^(.*)$ $1 [L]
+
+# Redirigir todas las demás rutas al index.html
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ /index.html [L]
+
+# Headers para módulos JavaScript
+<FilesMatch "\.(js|mjs)$">
+    Header set Content-Type "application/javascript"
+</FilesMatch>
+
+# Headers para archivos de módulos ES6
+<FilesMatch "\.(ts|tsx)$">
+    Header set Content-Type "application/javascript"
+</FilesMatch>
+
+
+
+
+
+
