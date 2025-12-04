@@ -114,7 +114,10 @@ const Navbar = () => {
     useEffect(() => {
         const loadUserData = async () => {
             const storedUsuario = JSON.parse(localStorage.getItem('usuario') || 'null');
-            if (!storedUsuario) return;
+            if (!storedUsuario) {
+                console.log('⚠️ NAVBAR: No hay usuario en localStorage');
+                return;
+            }
             
             setUsuario(storedUsuario);
             const permisos = storedUsuario?.permisos || [];
@@ -122,13 +125,16 @@ const Navbar = () => {
             
             // Debug: verificar permisos cargados
             console.log('=== NAVBAR: Cargando permisos ===');
-            console.log('Usuario:', storedUsuario.correo);
+            console.log('Usuario ID:', storedUsuario._id);
+            console.log('Usuario correo:', storedUsuario.correo);
             console.log('Permisos del localStorage:', permisos);
-            console.log('¿Tiene gestionar_clientes?', permisos.includes('gestionar_clientes'));
+            console.log('Cantidad de permisos:', permisos.length);
+            console.log('Permisos detallados:', permisos);
             
             // Intentar actualizar desde el backend si hay token
             const token = localStorage.getItem('access_token');
             if (token && storedUsuario._id) {
+                console.log('🔄 Intentando actualizar permisos desde backend...');
                 // Intentar primero con /auth/me, luego con /usuarios/me, /modificar-usuarios/me
                 const endpoints = [
                     `${import.meta.env.VITE_API_BASE_URL}/auth/me`,
@@ -139,14 +145,17 @@ const Navbar = () => {
                 
                 for (const endpoint of endpoints) {
                     try {
+                        console.log(`🔍 Intentando endpoint: ${endpoint}`);
                         const response = await fetchWithAuth(endpoint);
                         if (response.ok) {
                             const usuarioActualizado = await response.json();
+                            console.log('📦 Respuesta del backend:', usuarioActualizado);
                             // Normalizar respuesta (puede venir como objeto directo o dentro de 'usuario')
                             const usuarioData = usuarioActualizado.usuario || usuarioActualizado;
                             
                             if (usuarioData.permisos && Array.isArray(usuarioData.permisos)) {
                                 console.log('✅ Permisos actualizados desde backend:', usuarioData.permisos);
+                                console.log('📊 Cantidad de permisos actualizados:', usuarioData.permisos.length);
                                 setPermisosUsuario(usuarioData.permisos);
                                 // Actualizar localStorage
                                 const usuarioCompleto = {
@@ -156,15 +165,22 @@ const Navbar = () => {
                                 };
                                 localStorage.setItem('usuario', JSON.stringify(usuarioCompleto));
                                 setUsuario(usuarioCompleto);
+                                console.log('💾 Usuario actualizado en localStorage');
                                 break; // Salir del loop si encontramos un endpoint válido
+                            } else {
+                                console.log('⚠️ No se encontraron permisos en la respuesta');
                             }
+                        } else {
+                            console.log(`❌ Endpoint ${endpoint} respondió con status: ${response.status}`);
                         }
                     } catch (err) {
                         // Continuar con el siguiente endpoint si este falla
-                        console.log(`⚠️ Endpoint ${endpoint} no disponible, intentando siguiente...`);
+                        console.log(`⚠️ Error en endpoint ${endpoint}:`, err);
                         continue;
                     }
                 }
+            } else {
+                console.log('⚠️ No hay token o ID de usuario, usando permisos de localStorage');
             }
         };
 
@@ -235,15 +251,36 @@ const Navbar = () => {
         })).filter(category => category.items.length > 0)
         : [];
 
-    // Debug: verificar si el módulo de Clientes está disponible
+    // Debug: verificar permisos y módulos accesibles
     useEffect(() => {
-        const clientesCategory = accessibleLinks.find(cat => cat.category === 'Clientes');
-        console.log('=== DEBUG MÓDULO CLIENTES ===');
+        console.log('=== DEBUG NAVBAR - PERMISOS Y MÓDULOS ===');
         console.log('Permisos del usuario:', permisosUsuario);
-        console.log('¿Tiene gestionar_clientes?', permisosUsuario.includes('gestionar_clientes'));
-        console.log('Categoría Clientes encontrada:', clientesCategory);
-        console.log('Todos los links accesibles:', accessibleLinks.map(cat => cat.category));
-        console.log('============================');
+        console.log('Total de permisos:', permisosUsuario.length);
+        console.log('Categorías accesibles:', accessibleLinks.map(cat => ({
+            category: cat.category,
+            itemsCount: cat.items.length,
+            items: cat.items.map(item => item.label)
+        })));
+        console.log('Total de categorías:', accessibleLinks.length);
+        console.log('Total de items accesibles:', accessibleLinks.reduce((sum, cat) => sum + cat.items.length, 0));
+        
+        // Verificar cada categoría
+        allLinks.forEach(category => {
+            const accessibleItems = category.items.filter(link => !link.permiso || permisosUsuario.includes(link.permiso));
+            if (accessibleItems.length > 0) {
+                console.log(`✅ ${category.category}: ${accessibleItems.length} items accesibles`);
+                accessibleItems.forEach(item => {
+                    console.log(`   - ${item.label} (requiere: ${item.permiso || 'ninguno'})`);
+                });
+            } else {
+                console.log(`❌ ${category.category}: 0 items accesibles`);
+                category.items.forEach(item => {
+                    const tienePermiso = !item.permiso || permisosUsuario.includes(item.permiso);
+                    console.log(`   - ${item.label}: ${tienePermiso ? '✅' : '❌'} (requiere: ${item.permiso || 'ninguno'})`);
+                });
+            }
+        });
+        console.log('==========================================');
     }, [accessibleLinks, permisosUsuario]);
 
     // Filter links based on search term
