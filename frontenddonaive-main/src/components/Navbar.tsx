@@ -258,11 +258,23 @@ const Navbar = () => {
         }
     }, [isDropdownOpen, isMobileMenuOpen]);
 
+    // Verificar si tiene acceso total (debe estar al inicio para que se evalúe primero)
+    const tieneAccesoTotal = permisosUsuario.some(p => 
+        p === 'admin' || 
+        p === 'super_admin' || 
+        p === 'acceso_total' || 
+        p === 'acceso_admin'
+    );
+
     // Filter links based on user permissions
     const accessibleLinks = permisosUsuario.length > 0
         ? allLinks.map(category => ({
             ...category,
             items: category.items.filter(link => {
+                // Si tiene acceso total, mostrar TODOS los módulos
+                if (tieneAccesoTotal) {
+                    return true;
+                }
                 // Si no requiere permiso, mostrar siempre
                 if (!link.permiso) return true;
                 // Usar la función helper para verificar permisos
@@ -273,9 +285,20 @@ const Navbar = () => {
 
     // Debug: verificar permisos y módulos accesibles
     useEffect(() => {
+        const tieneAccesoTotal = permisosUsuario.some(p => 
+            p === 'admin' || 
+            p === 'super_admin' || 
+            p === 'acceso_total' || 
+            p === 'acceso_admin'
+        );
+        
         console.log('=== DEBUG NAVBAR - PERMISOS Y MÓDULOS ===');
         console.log('Permisos del usuario:', permisosUsuario);
         console.log('Total de permisos:', permisosUsuario.length);
+        console.log('¿Tiene acceso total?', tieneAccesoTotal);
+        if (tieneAccesoTotal) {
+            console.log('✅ Usuario tiene acceso total - debería ver TODOS los módulos');
+        }
         console.log('Categorías accesibles:', accessibleLinks.map(cat => ({
             category: cat.category,
             itemsCount: cat.items.length,
