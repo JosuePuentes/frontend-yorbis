@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { TrendingUp, Globe, Users, Target, Phone, ShoppingCart, Building, Palette, Briefcase } from 'lucide-react';
+import { TrendingUp, Users, Target, Phone, ShoppingCart, Building, Briefcase } from 'lucide-react';
 
 const ServicesPage: React.FC = () => {
     const services = [
