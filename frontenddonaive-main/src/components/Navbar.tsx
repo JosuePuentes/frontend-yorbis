@@ -136,6 +136,7 @@ const Navbar = () => {
             
             setUsuario(storedUsuario);
             const permisos = storedUsuario?.permisos || [];
+            // IMPORTANTE: Establecer permisos inmediatamente para que estén disponibles
             setPermisosUsuario(permisos);
             
             // Debug: verificar permisos cargados
@@ -146,7 +147,7 @@ const Navbar = () => {
             console.log('Cantidad de permisos:', permisos.length);
             console.log('Permisos detallados:', permisos);
             
-            // Intentar actualizar desde el backend si hay token
+            // Intentar actualizar desde el backend si hay token (pero mantener los permisos actuales)
             const token = localStorage.getItem('access_token');
             if (token && storedUsuario._id) {
                 console.log('🔄 Intentando actualizar permisos desde backend...');
@@ -168,7 +169,7 @@ const Navbar = () => {
                             // Normalizar respuesta (puede venir como objeto directo o dentro de 'usuario')
                             const usuarioData = usuarioActualizado.usuario || usuarioActualizado;
                             
-                            if (usuarioData.permisos && Array.isArray(usuarioData.permisos)) {
+                            if (usuarioData.permisos && Array.isArray(usuarioData.permisos) && usuarioData.permisos.length > 0) {
                                 console.log('✅ Permisos actualizados desde backend:', usuarioData.permisos);
                                 console.log('📊 Cantidad de permisos actualizados:', usuarioData.permisos.length);
                                 setPermisosUsuario(usuarioData.permisos);
@@ -183,7 +184,8 @@ const Navbar = () => {
                                 console.log('💾 Usuario actualizado en localStorage');
                                 break; // Salir del loop si encontramos un endpoint válido
                             } else {
-                                console.log('⚠️ No se encontraron permisos en la respuesta');
+                                console.log('⚠️ No se encontraron permisos en la respuesta o están vacíos, manteniendo permisos de localStorage');
+                                // Mantener los permisos del localStorage si el backend no devuelve permisos válidos
                             }
                         } else {
                             console.log(`❌ Endpoint ${endpoint} respondió con status: ${response.status}`);
@@ -194,6 +196,7 @@ const Navbar = () => {
                         continue;
                     }
                 }
+                console.log('✅ Finalizando carga de permisos. Permisos finales:', permisosUsuario);
             } else {
                 console.log('⚠️ No hay token o ID de usuario, usando permisos de localStorage');
             }
@@ -285,6 +288,10 @@ const Navbar = () => {
 
     // Debug: verificar permisos y módulos accesibles
     useEffect(() => {
+        // Obtener permisos actuales del localStorage también para comparar
+        const storedUsuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        const permisosLocalStorage = storedUsuario?.permisos || [];
+        
         const tieneAccesoTotal = permisosUsuario.some(p => 
             p === 'admin' || 
             p === 'super_admin' || 
@@ -293,12 +300,21 @@ const Navbar = () => {
         );
         
         console.log('=== DEBUG NAVBAR - PERMISOS Y MÓDULOS ===');
-        console.log('Permisos del usuario:', permisosUsuario);
-        console.log('Total de permisos:', permisosUsuario.length);
+        console.log('Permisos del estado (permisosUsuario):', permisosUsuario);
+        console.log('Permisos del localStorage:', permisosLocalStorage);
+        console.log('Total de permisos (estado):', permisosUsuario.length);
+        console.log('Total de permisos (localStorage):', permisosLocalStorage.length);
         console.log('¿Tiene acceso total?', tieneAccesoTotal);
         if (tieneAccesoTotal) {
             console.log('✅ Usuario tiene acceso total - debería ver TODOS los módulos');
         }
+        
+        // Si los permisos del estado están vacíos pero hay permisos en localStorage, hay un problema
+        if (permisosUsuario.length === 0 && permisosLocalStorage.length > 0) {
+            console.warn('⚠️ PROBLEMA DETECTADO: Los permisos del estado están vacíos pero hay permisos en localStorage');
+            console.warn('⚠️ Esto puede causar que no se muestren los módulos');
+        }
+        
         console.log('Categorías accesibles:', accessibleLinks.map(cat => ({
             category: cat.category,
             itemsCount: cat.items.length,
