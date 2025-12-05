@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import UploadInventarioExcel from "../components/UploadInventarioExcel";
 import ModificarItemInventarioModal from "../components/ModificarItemInventarioModal";
 import VerItemsInventarioModal from "../components/VerItemsInventarioModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Download, Trash2, Edit, Eye } from "lucide-react";
+import { Download, Trash2, Edit, Eye, Search } from "lucide-react";
+import { fetchWithAuth } from "@/lib/api";
 
 interface Inventario {
   _id: string;
@@ -40,6 +41,12 @@ const VisualizarInventariosPage: React.FC = () => {
   const [totalesCostoInventario, setTotalesCostoInventario] = useState<{ [key: string]: number }>({});
   const [descuentosPorInventario, setDescuentosPorInventario] = useState<{ [key: string]: number }>({});
   const [guardandoDescuento, setGuardandoDescuento] = useState<{ [key: string]: boolean }>({});
+  
+  // Estados para la vista de productos
+  const [todosLosProductos, setTodosLosProductos] = useState<any[]>([]);
+  const [cargandoProductos, setCargandoProductos] = useState(false);
+  const [busquedaProducto, setBusquedaProducto] = useState("");
+  const [vistaTabla, setVistaTabla] = useState(false); // false = vista inventarios, true = vista tabla productos
 
   const fetchInventarios = async (): Promise<Inventario[]> => {
     setLoading(true);
@@ -101,6 +108,143 @@ const VisualizarInventariosPage: React.FC = () => {
   useEffect(() => {
     fetchInventarios();
   }, []);
+
+  // Cargar todos los productos de todos los inventarios
+  const cargarTodosLosProductos = async () => {
+    setCargandoProductos(true);
+    try {
+      const token = localStorage.getItem("access_token");
+      if (!token) return;
+
+      // Obtener todos los inventarios
+      const resInventarios = await fetch(`${API_BASE_URL}/inventarios`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+
+      if (!resInventarios.ok) {
+        throw new Error("Error al obtener inventarios");
+      }
+
+      const inventariosData = await resInventarios.json();
+      const inventariosArray = Array.isArray(inventariosData) ? inventariosData : [];
+
+      // Cargar items de todos los inventarios en paralelo
+      const promesasItems = inventariosArray.map(async (inventario: any) => {
+        try {
+          const resItems = await fetch(`${API_BASE_URL}/inventarios/${inventario._id}/items`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          });
+
+          if (resItems.ok) {
+            const items = await resItems.json();
+            const itemsArray = Array.isArray(items) ? items : [];
+            
+            // Agregar información del inventario a cada item
+            return itemsArray.map((item: any) => ({
+              ...item,
+              inventario_id: inventario._id,
+              fecha_carga: inventario.fecha,
+              sucursal_id: inventario.farmacia,
+              sucursal_nombre: farmacias.find(f => f.id === inventario.farmacia || f.nombre === inventario.farmacia)?.nombre || inventario.farmacia
+            }));
+          } else if (resItems.status === 404) {
+            // Intentar endpoint alternativo
+            try {
+              const resAlt = await fetch(`${API_BASE_URL}/productos?inventario_id=${inventario._id}`, {
+                headers: { "Authorization": `Bearer ${token}` }
+              });
+              if (resAlt.ok) {
+                const data = await resAlt.json();
+                const productos = Array.isArray(data) ? data : (data.productos || data.items || []);
+                return productos.map((item: any) => ({
+                  ...item,
+                  inventario_id: inventario._id,
+                  fecha_carga: inventario.fecha,
+                  sucursal_id: inventario.farmacia,
+                  sucursal_nombre: farmacias.find(f => f.id === inventario.farmacia || f.nombre === inventario.farmacia)?.nombre || inventario.farmacia
+                }));
+              }
+            } catch (err) {
+              console.warn(`Error al obtener productos alternativos para inventario ${inventario._id}:`, err);
+            }
+          }
+          return [];
+        } catch (err) {
+          console.error(`Error al obtener items del inventario ${inventario._id}:`, err);
+          return [];
+        }
+      });
+
+      const resultados = await Promise.all(promesasItems);
+      const productosPlanaos = resultados.flat();
+      
+      // Normalizar productos
+      const productosNormalizados = productosPlanaos.map((item: any) => ({
+        ...item,
+        codigo: item.codigo || item.codigo_producto || "",
+        descripcion: item.descripcion || item.nombre || item.descripcion_producto || "",
+        marca: item.marca || item.marca_producto || "",
+        costo: item.costo_unitario || item.costo || 0,
+        costo_unitario: item.costo_unitario || item.costo || 0,
+        precio: item.precio_unitario || item.precio || 0,
+        precio_unitario: item.precio_unitario || item.precio || 0,
+        cantidad: item.cantidad || item.existencia || item.stock || 0,
+        existencia: item.cantidad || item.existencia || item.stock || 0,
+        utilidad: item.utilidad_contable ?? (item.precio_unitario || item.precio || 0) - (item.costo_unitario || item.costo || 0),
+        porcentaje_ganancia: item.porcentaje_ganancia ?? (((item.precio_unitario || item.precio || 0) - (item.costo_unitario || item.costo || 0)) / (item.costo_unitario || item.costo || 1)) * 100
+      }));
+
+      setTodosLosProductos(productosNormalizados);
+      console.log(`✅ [INVENTARIOS] Productos cargados: ${productosNormalizados.length}`);
+    } catch (err: any) {
+      console.error("Error al cargar todos los productos:", err);
+      setError(err.message || "Error al cargar productos");
+    } finally {
+      setCargandoProductos(false);
+    }
+  };
+
+  // Cargar productos cuando se cambia a vista tabla
+  useEffect(() => {
+    if (vistaTabla && todosLosProductos.length === 0 && !cargandoProductos) {
+      cargarTodosLosProductos();
+    }
+  }, [vistaTabla]);
+
+  // Filtrar productos según búsqueda
+  const productosFiltrados = useMemo(() => {
+    if (!busquedaProducto.trim()) {
+      return todosLosProductos;
+    }
+
+    const busquedaLower = busquedaProducto.toLowerCase().trim();
+    return todosLosProductos.filter((producto: any) => {
+      const codigo = (producto.codigo || "").toLowerCase();
+      const descripcion = (producto.descripcion || "").toLowerCase();
+      const marca = (producto.marca || "").toLowerCase();
+      const sucursal = (producto.sucursal_nombre || "").toLowerCase();
+      
+      return codigo.includes(busquedaLower) ||
+             descripcion.includes(busquedaLower) ||
+             marca.includes(busquedaLower) ||
+             sucursal.includes(busquedaLower);
+    });
+  }, [todosLosProductos, busquedaProducto]);
+
+  // Calcular totales
+  const totales = useMemo(() => {
+    const totalItems = productosFiltrados.length;
+    const totalCostoInventario = productosFiltrados.reduce((sum, producto: any) => {
+      const cantidad = Number(producto.cantidad || producto.existencia || 0);
+      const costo = Number(producto.costo_unitario || producto.costo || 0);
+      return sum + (cantidad * costo);
+    }, 0);
+
+    return {
+      totalItems,
+      totalCostoInventario
+    };
+  }, [productosFiltrados]);
 
   // Cargar totales de existencias y costo total para cada inventario
   useEffect(() => {
@@ -480,34 +624,178 @@ const VisualizarInventariosPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
-      <div className="w-full max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-slate-800">Inventarios Registrados</h1>
-          {inventariosFiltrados.length > 0 && (
+          <div className="flex gap-2">
             <Button
-              onClick={handleExportarTodos}
-              disabled={loading}
-              variant="outline"
+              onClick={() => {
+                setVistaTabla(!vistaTabla);
+                if (!vistaTabla && todosLosProductos.length === 0) {
+                  cargarTodosLosProductos();
+                }
+              }}
+              variant={vistaTabla ? "default" : "outline"}
               className="flex items-center gap-2"
             >
-              <Download className="h-4 w-4" />
-              Exportar Todos a Excel
+              {vistaTabla ? "Vista Inventarios" : "Vista Productos"}
             </Button>
-          )}
+            {inventariosFiltrados.length > 0 && !vistaTabla && (
+              <Button
+                onClick={handleExportarTodos}
+                disabled={loading}
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                <Download className="h-4 w-4" />
+                Exportar Todos a Excel
+              </Button>
+            )}
+          </div>
         </div>
         
-        {/* Componente para subir inventario desde Excel */}
-        <UploadInventarioExcel
-          sucursales={farmacias}
-          onSuccess={fetchInventarios}
-        />
+        {/* Componente para subir inventario desde Excel - Solo mostrar si no está en vista tabla */}
+        {!vistaTabla && (
+          <UploadInventarioExcel
+            sucursales={farmacias}
+            onSuccess={fetchInventarios}
+          />
+        )}
+
         {error && (
           <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-md shadow" role="alert">
             <p className="font-bold">Error</p>
             <p>{error}</p>
           </div>
         )}
-        {loading ? (
+
+        {/* Vista de Tabla de Productos */}
+        {vistaTabla ? (
+          <div className="bg-white rounded-lg shadow-xl overflow-hidden">
+            {/* Navbar con totales */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
+                  <div className="text-sm font-medium opacity-90 mb-1">Total de Items</div>
+                  <div className="text-3xl font-bold">{totales.totalItems.toLocaleString('es-VE')}</div>
+                </div>
+                <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
+                  <div className="text-sm font-medium opacity-90 mb-1">Total Costo Inventario</div>
+                  <div className="text-3xl font-bold">
+                    ${totales.totalCostoInventario.toLocaleString('es-VE', { 
+                      minimumFractionDigits: 2, 
+                      maximumFractionDigits: 2 
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Buscador */}
+            <div className="p-4 border-b bg-slate-50">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
+                <Input
+                  type="text"
+                  placeholder="Buscar por código, descripción, marca o sucursal..."
+                  value={busquedaProducto}
+                  onChange={(e) => setBusquedaProducto(e.target.value)}
+                  className="pl-10 w-full"
+                />
+              </div>
+              <div className="mt-2 text-sm text-slate-600">
+                Mostrando {productosFiltrados.length} de {todosLosProductos.length} productos
+              </div>
+            </div>
+
+            {/* Tabla de productos */}
+            {cargandoProductos ? (
+              <div className="text-center py-10 text-slate-500">
+                <svg className="animate-spin h-8 w-8 text-indigo-600 mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Cargando productos...
+              </div>
+            ) : productosFiltrados.length === 0 ? (
+              <div className="text-center py-10 text-slate-500">
+                <p>No se encontraron productos</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto max-h-[70vh]">
+                <table className="min-w-full divide-y divide-slate-200">
+                  <thead className="bg-slate-100 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Código</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Descripción</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Marca</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Costo</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Utilidad</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Precio</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Existencia</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Sucursal</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Fecha Carga</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-slate-200">
+                    {productosFiltrados.map((producto: any, index: number) => {
+                      const costo = Number(producto.costo_unitario || producto.costo || 0);
+                      const precio = Number(producto.precio_unitario || producto.precio || 0);
+                      const cantidad = Number(producto.cantidad || producto.existencia || 0);
+                      const utilidad = Number(producto.utilidad || (precio - costo));
+                      const porcentajeGanancia = Number(producto.porcentaje_ganancia || ((precio - costo) / (costo || 1)) * 100);
+                      
+                      return (
+                        <tr key={producto._id || producto.id || index} className="hover:bg-slate-50">
+                          <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-slate-900">{producto.codigo || "-"}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{producto.descripcion || "-"}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{producto.marca || "-"}</td>
+                          <td className="px-4 py-3 text-sm text-right text-slate-700">
+                            ${costo.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right text-green-600 font-medium">
+                            ${utilidad.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            <div className="text-xs text-slate-500">({porcentajeGanancia.toFixed(2)}%)</div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right font-semibold text-slate-900">
+                            ${precio.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right text-slate-700">{cantidad.toLocaleString('es-VE')}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{producto.sucursal_nombre || producto.sucursal_id || "-"}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">
+                            {producto.fecha_carga ? new Date(producto.fecha_carga).toLocaleDateString('es-VE') : "-"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="bg-slate-50 sticky bottom-0">
+                    <tr>
+                      <td colSpan={3} className="px-4 py-3 text-sm font-bold text-slate-900">TOTALES</td>
+                      <td className="px-4 py-3 text-sm text-right font-bold text-slate-900">
+                        ${productosFiltrados.reduce((sum, p: any) => sum + Number(p.costo_unitario || p.costo || 0), 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right font-bold text-green-600">
+                        ${productosFiltrados.reduce((sum, p: any) => {
+                          const costo = Number(p.costo_unitario || p.costo || 0);
+                          const precio = Number(p.precio_unitario || p.precio || 0);
+                          return sum + (precio - costo);
+                        }, 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right font-bold text-slate-900">
+                        ${productosFiltrados.reduce((sum, p: any) => sum + Number(p.precio_unitario || p.precio || 0), 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right font-bold text-slate-900">
+                        {productosFiltrados.reduce((sum, p: any) => sum + Number(p.cantidad || p.existencia || 0), 0).toLocaleString('es-VE')}
+                      </td>
+                      <td colSpan={2}></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+        ) : loading ? (
           <div className="text-center py-10 text-slate-500 text-lg">
             <svg className="animate-spin h-8 w-8 text-indigo-600 mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
