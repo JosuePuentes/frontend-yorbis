@@ -167,6 +167,21 @@ const VisualizarInventariosPage: React.FC = () => {
           // Calcular precio = costo + utilidad
           const precio = costo + utilidadEnDinero;
 
+          // Buscar el inventario correspondiente a esta compra/sucursal
+          // Necesitamos encontrar el inventario_id para poder editar el producto
+          let inventarioId = "";
+          if (compra.inventario_id) {
+            inventarioId = compra.inventario_id;
+          } else {
+            // Intentar encontrar el inventario por fecha y sucursal
+            const inventarioEncontrado = inventarios.find((inv: any) => 
+              inv.farmacia === sucursalId && inv.fecha === fechaCompra
+            );
+            if (inventarioEncontrado) {
+              inventarioId = inventarioEncontrado._id;
+            }
+          }
+
           const producto = {
             _id: item._id || item.id || `${compra._id}_${item.codigo || Math.random()}`,
             codigo: item.codigo || item.codigo_producto || "",
@@ -183,7 +198,8 @@ const VisualizarInventariosPage: React.FC = () => {
             fecha_carga: fechaCompra,
             sucursal_id: sucursalId,
             sucursal_nombre: sucursalNombre,
-            compra_id: compra._id
+            compra_id: compra._id,
+            inventario_id: inventarioId // Agregar inventario_id para poder editar
           };
 
           todosLosProductos.push(producto);
@@ -780,10 +796,19 @@ const VisualizarInventariosPage: React.FC = () => {
                   <tbody className="bg-white divide-y divide-slate-200">
                     {productosFiltrados.map((producto: any, index: number) => {
                       const costo = Number(producto.costo_unitario || producto.costo || 0);
-                      const utilidad = Number(producto.utilidad || 0); // Utilidad viene de la compra
+                      const utilidad = Number(producto.utilidad || 0); // Utilidad viene de la compra (en dinero)
+                      const utilidadPorcentaje = Number(producto.utilidad_porcentaje || producto.porcentaje_ganancia || 0); // Porcentaje de utilidad
                       const precio = Number(producto.precio_unitario || producto.precio || (costo + utilidad)); // Precio = Costo + Utilidad
                       const cantidad = Number(producto.cantidad || producto.existencia || 0);
-                      const porcentajeGanancia = Number(producto.utilidad_porcentaje || producto.porcentaje_ganancia || ((utilidad / (costo || 1)) * 100));
+                      
+                      // Calcular porcentaje de ganancia si no viene
+                      let porcentajeGanancia = utilidadPorcentaje;
+                      if (porcentajeGanancia === 0 && utilidad > 0 && costo > 0) {
+                        porcentajeGanancia = (utilidad / costo) * 100;
+                      } else if (porcentajeGanancia === 0 && precio > costo && costo > 0) {
+                        porcentajeGanancia = ((precio - costo) / costo) * 100;
+                      }
+                      
                       const total = costo * cantidad; // Total = Costo × Cantidad
                       
                       return (
@@ -1043,7 +1068,7 @@ const VisualizarInventariosPage: React.FC = () => {
               // Recargar productos después de editar
               cargarTodosLosProductos();
             }}
-            inventarioId={productoAEditar.inventario_id || productoAEditar.compra_id || ""}
+            inventarioId={productoAEditar.inventario_id || ""}
             sucursalId={productoAEditar.sucursal_id || ""}
             onSuccess={() => {
               setProductoAEditar(null);
