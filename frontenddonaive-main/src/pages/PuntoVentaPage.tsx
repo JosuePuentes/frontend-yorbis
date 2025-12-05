@@ -707,14 +707,40 @@ const PuntoVentaPage: React.FC = () => {
           
           if (res.ok) {
             const data = await res.json();
-            setClientesEncontrados(Array.isArray(data) ? data : []);
+            console.log("🔍 [CLIENTES] Respuesta del backend:", data);
+            
+            // Manejar diferentes formatos de respuesta
+            let clientesArray: any[] = [];
+            if (Array.isArray(data)) {
+              clientesArray = data;
+            } else if (data && Array.isArray(data.clientes)) {
+              clientesArray = data.clientes;
+            } else if (data && Array.isArray(data.data)) {
+              clientesArray = data.data;
+            } else if (data && Array.isArray(data.items)) {
+              clientesArray = data.items;
+            } else if (data && typeof data === 'object') {
+              // Intentar extraer cualquier array del objeto
+              const keys = Object.keys(data);
+              for (const key of keys) {
+                if (Array.isArray(data[key])) {
+                  clientesArray = data[key];
+                  break;
+                }
+              }
+            }
+            
+            console.log(`✅ [CLIENTES] Clientes encontrados: ${clientesArray.length}`);
+            setClientesEncontrados(clientesArray);
           } else {
+            const errorData = await res.json().catch(() => null);
+            console.error("❌ [CLIENTES] Error en respuesta:", res.status, errorData);
             setClientesEncontrados([]);
           }
         } catch (error: any) {
           // Ignorar errores de cancelación
           if (error.name !== 'AbortError') {
-            console.error("Error al buscar clientes:", error);
+            console.error("❌ [CLIENTES] Error al buscar clientes:", error);
             setClientesEncontrados([]);
           }
         } finally {
@@ -2585,6 +2611,13 @@ const PuntoVentaPage: React.FC = () => {
               {buscandoClientes && busquedaCliente.trim().length >= 1 && (
                 <div className="mt-1 text-sm text-gray-500 text-center py-1">
                   Buscando clientes...
+                </div>
+              )}
+              {!buscandoClientes && busquedaCliente.trim().length >= 1 && clientesEncontrados.length === 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3">
+                  <div className="text-sm text-gray-500 text-center">
+                    No se encontraron clientes
+                  </div>
                 </div>
               )}
               {!buscandoClientes && clientesEncontrados.length > 0 && (
