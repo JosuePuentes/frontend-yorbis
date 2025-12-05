@@ -162,6 +162,33 @@ const ModalCrearCompra: React.FC<ModalCrearCompraProps> = ({
                 marca.includes(busquedaLower)
               );
             });
+
+            // Agregar a la lista (evitar duplicados por código)
+            itemsFiltrados.forEach((item: any) => {
+              // Normalizar datos del producto - el backend puede usar diferentes nombres de campos
+              const productoNormalizado = {
+                _id: item._id || item.id,
+                codigo: item.codigo || item.codigo_producto || "",
+                descripcion: item.descripcion || item.nombre || item.descripcion_producto || "",
+                marca: item.marca || item.marca_producto || "",
+                costo_unitario: item.costo_unitario || item.costo || 0,
+                precio_unitario: item.precio_unitario || item.precio || 0,
+                cantidad: item.cantidad || item.existencia || item.stock || 0,
+                lotes: item.lotes || [],
+              };
+              
+              const existe = todosLosProductos.some(
+                (p) => p.codigo === productoNormalizado.codigo
+              );
+              if (!existe && productoNormalizado.codigo) {
+                todosLosProductos.push(productoNormalizado);
+                console.log(`✅ [COMPRAS] Producto encontrado:`, {
+                  codigo: productoNormalizado.codigo,
+                  descripcion: productoNormalizado.descripcion,
+                  marca: productoNormalizado.marca
+                });
+              }
+            });
           } else if (resItems.status === 404) {
             // Intentar endpoint alternativo
             try {
@@ -220,34 +247,6 @@ const ModalCrearCompra: React.FC<ModalCrearCompraProps> = ({
             } catch (err) {
               console.warn(`⚠️ [COMPRAS] Endpoint alternativo falló para inventario ${inventario._id}:`, err);
             }
-          }
-
-            // Agregar a la lista (evitar duplicados por código)
-            itemsFiltrados.forEach((item: any) => {
-              // Normalizar datos del producto - el backend puede usar diferentes nombres de campos
-              const productoNormalizado = {
-                _id: item._id || item.id,
-                codigo: item.codigo || item.codigo_producto || "",
-                descripcion: item.descripcion || item.nombre || item.descripcion_producto || "",
-                marca: item.marca || item.marca_producto || "",
-                costo_unitario: item.costo_unitario || item.costo || 0,
-                precio_unitario: item.precio_unitario || item.precio || 0,
-                cantidad: item.cantidad || item.existencia || item.stock || 0,
-                lotes: item.lotes || [],
-              };
-              
-              const existe = todosLosProductos.some(
-                (p) => p.codigo === productoNormalizado.codigo
-              );
-              if (!existe && productoNormalizado.codigo) {
-                todosLosProductos.push(productoNormalizado);
-                console.log(`✅ [COMPRAS] Producto encontrado:`, {
-                  codigo: productoNormalizado.codigo,
-                  descripcion: productoNormalizado.descripcion,
-                  marca: productoNormalizado.marca
-                });
-              }
-            });
           }
         } catch (err) {
           console.error(`Error al obtener items del inventario ${inventario._id}:`, err);
