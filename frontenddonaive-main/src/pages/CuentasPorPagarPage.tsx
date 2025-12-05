@@ -81,6 +81,21 @@ const CuentasPorPagarPage: React.FC = () => {
         
         console.log("✅ [COMPRAS] Compras extraídas:", comprasArray.length, "compras");
         
+        // Log detallado de la primera compra para diagnosticar
+        if (comprasArray.length > 0) {
+          const primeraCompra = comprasArray[0];
+          console.log("📋 [COMPRAS] Primera compra (muestra):", {
+            _id: primeraCompra._id,
+            proveedor_id: primeraCompra.proveedor_id || primeraCompra.proveedorId,
+            proveedor_nombre: primeraCompra.proveedor_nombre || primeraCompra.proveedorNombre,
+            tiene_proveedor_poblado: !!primeraCompra.proveedor,
+            proveedor: primeraCompra.proveedor,
+            fecha: primeraCompra.fecha || primeraCompra.fecha_compra || primeraCompra.fecha_creacion,
+            items: primeraCompra.items || primeraCompra.productos,
+            cantidad_items: (primeraCompra.items || primeraCompra.productos || []).length
+          });
+        }
+        
         // Log detallado de pagos para cada compra
         comprasArray.forEach((compra: any) => {
           if (compra.pagos && compra.pagos.length > 0) {

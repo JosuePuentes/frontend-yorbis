@@ -330,14 +330,14 @@ const PuntoVentaPage: React.FC = () => {
         setBuscandoProductos(true);
         
         try {
-          const res = await fetchWithAuth(
-            `${API_BASE_URL}/punto-venta/productos/buscar?q=${encodeURIComponent(busqueda)}&sucursal=${sucursalSeleccionada.id}`,
-            { signal: abortController.signal }
-          );
+          const url = `${API_BASE_URL}/punto-venta/productos/buscar?q=${encodeURIComponent(busqueda)}&sucursal=${sucursalSeleccionada.id}`;
+          console.log(`🔍 [PUNTO_VENTA] Buscando productos en: ${url}`);
+          
+          const res = await fetchWithAuth(url, { signal: abortController.signal });
           
           if (res.ok && !abortController.signal.aborted) {
             const data = await res.json();
-            console.log(`🔍 [PUNTO_VENTA] Respuesta de búsqueda:`, data);
+            console.log(`🔍 [PUNTO_VENTA] Respuesta completa:`, JSON.stringify(data, null, 2));
             console.log(`🔍 [PUNTO_VENTA] Tipo de dato:`, typeof data);
             console.log(`🔍 [PUNTO_VENTA] Es array?:`, Array.isArray(data));
             
@@ -345,27 +345,40 @@ const PuntoVentaPage: React.FC = () => {
             let productosArray: any[] = [];
             if (Array.isArray(data)) {
               productosArray = data;
+              console.log(`✅ [PUNTO_VENTA] Formato: Array directo`);
             } else if (data && Array.isArray(data.productos)) {
               productosArray = data.productos;
+              console.log(`✅ [PUNTO_VENTA] Formato: data.productos`);
             } else if (data && Array.isArray(data.items)) {
               productosArray = data.items;
+              console.log(`✅ [PUNTO_VENTA] Formato: data.items`);
+            } else if (data && Array.isArray(data.resultados)) {
+              productosArray = data.resultados;
+              console.log(`✅ [PUNTO_VENTA] Formato: data.resultados`);
             } else if (data && typeof data === 'object') {
               // Si es un objeto, intentar extraer arrays
               const valores = Object.values(data);
               const arrays = valores.filter(Array.isArray);
               if (arrays.length > 0) {
                 productosArray = arrays.flat() as any[];
+                console.log(`✅ [PUNTO_VENTA] Formato: Objeto con arrays`);
+              } else {
+                console.warn(`⚠️ [PUNTO_VENTA] No se encontró array en la respuesta`);
               }
             }
             
             console.log(`✅ [PUNTO_VENTA] Productos encontrados: ${productosArray.length}`);
             if (productosArray.length > 0) {
               console.log(`📦 [PUNTO_VENTA] Primer producto:`, productosArray[0]);
+              console.log(`📦 [PUNTO_VENTA] Campos del primer producto:`, Object.keys(productosArray[0]));
+            } else {
+              console.warn(`⚠️ [PUNTO_VENTA] No se encontraron productos para la búsqueda: "${busqueda}"`);
             }
             
             setProductosEncontrados(productosArray);
           } else if (!abortController.signal.aborted) {
-            console.warn(`⚠️ [PUNTO_VENTA] Error en búsqueda, status: ${res.status}`);
+            const errorText = await res.text().catch(() => '');
+            console.warn(`⚠️ [PUNTO_VENTA] Error en búsqueda, status: ${res.status}, error: ${errorText}`);
             setProductosEncontrados([]);
           }
         } catch (error: any) {

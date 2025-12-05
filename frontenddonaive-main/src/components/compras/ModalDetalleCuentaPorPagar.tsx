@@ -93,14 +93,98 @@ const ModalDetalleCuentaPorPagar: React.FC<ModalDetalleCuentaPorPagarProps> = ({
   compra,
   onPagoCompletado,
 }) => {
-  // Normalizar compra para asegurar que items y pagos sean arrays
+  // Estado para proveedores (cargar si no viene poblado)
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  
+  // Cargar proveedores si no vienen poblados
+  useEffect(() => {
+    const fetchProveedores = async () => {
+      if (!compra.proveedor && (compra.proveedor_id || compra.proveedorId)) {
+        try {
+          const token = localStorage.getItem("access_token");
+          if (!token) return;
+          
+          const res = await fetch(`${API_BASE_URL}/proveedores`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          
+          if (res.ok) {
+            const data = await res.json();
+            let proveedoresData: any[] = [];
+            if (Array.isArray(data)) {
+              proveedoresData = data;
+            } else if (data && Array.isArray(data.proveedores)) {
+              proveedoresData = data.proveedores;
+            } else if (data && data.proveedor) {
+              proveedoresData = Array.isArray(data.proveedor) ? data.proveedor : [data.proveedor];
+            }
+            
+            const proveedoresNormalizados = proveedoresData.map((p: any) => ({
+              _id: p._id || p.id,
+              nombre: p.nombre || "Sin nombre",
+              rif: p.rif || "",
+              telefono: p.telefono || "",
+              dias_credito: p.dias_credito !== undefined && p.dias_credito !== null ? Number(p.dias_credito) : 0,
+              descuento_comercial: p.descuento_comercial !== undefined && p.descuento_comercial !== null ? Number(p.descuento_comercial) : 0,
+              descuento_pronto_pago: p.descuento_pronto_pago !== undefined && p.descuento_pronto_pago !== null ? Number(p.descuento_pronto_pago) : 0,
+            }));
+            
+            setProveedores(proveedoresNormalizados);
+            console.log(`✅ [MODAL] Proveedores cargados: ${proveedoresNormalizados.length}`);
+          }
+        } catch (err) {
+          console.error("Error al cargar proveedores en modal:", err);
+        }
+      }
+    };
+    
+    if (open) {
+      fetchProveedores();
+    }
+  }, [open, compra.proveedor, compra.proveedor_id, compra.proveedorId]);
+
+  // Normalizar compra para asegurar que items y pagos sean arrays, y proveedor esté poblado
   const compraNormalizada = React.useMemo(() => {
+    let proveedorFinal = compra.proveedor;
+    
+    // Si no viene poblado, buscar en la lista de proveedores cargados
+    if (!proveedorFinal && (compra.proveedor_id || compra.proveedorId) && proveedores.length > 0) {
+      const proveedorId = compra.proveedor_id || compra.proveedorId || "";
+      const proveedorEncontrado = proveedores.find((p: Proveedor) => {
+        const idProveedor = String(p._id || "");
+        const idCompra = String(proveedorId || "");
+        return p._id === proveedorId || 
+               idProveedor === idCompra || 
+               idProveedor.toLowerCase() === idCompra.toLowerCase() ||
+               p._id?.toString() === proveedorId?.toString();
+      });
+      
+      if (proveedorEncontrado) {
+        proveedorFinal = proveedorEncontrado;
+        console.log(`✅ [MODAL] Proveedor encontrado: ${proveedorEncontrado.nombre}, días crédito: ${proveedorEncontrado.dias_credito}`);
+      } else {
+        console.warn(`⚠️ [MODAL] Proveedor no encontrado, ID: ${proveedorId}`);
+        proveedorFinal = {
+          _id: proveedorId,
+          nombre: compra.proveedor_nombre || compra.proveedorNombre || "Proveedor no encontrado",
+          rif: "",
+          telefono: "",
+          dias_credito: compra.dias_credito || 0,
+          descuento_comercial: 0,
+          descuento_pronto_pago: 0
+        };
+      }
+    }
+    
     return {
       ...compra,
+      proveedor: proveedorFinal,
       items: compra.items && Array.isArray(compra.items) ? compra.items : (compra.productos && Array.isArray(compra.productos) ? compra.productos : []),
       pagos: compra.pagos && Array.isArray(compra.pagos) ? compra.pagos : [],
     };
-  }, [compra]);
+  }, [compra, proveedores]);
 
   // Log para diagnosticar
   useEffect(() => {
