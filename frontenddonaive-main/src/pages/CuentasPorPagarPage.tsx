@@ -155,39 +155,59 @@ const CuentasPorPagarPage: React.FC = () => {
           // Usar directamente compra.proveedor si viene del backend
           let proveedorNormalizado = compra.proveedor;
           
+          // Normalizar proveedor_id - el backend puede enviar proveedor_id o proveedorId
+          const proveedorId = compra.proveedor_id || compra.proveedorId || "";
+          
           // Solo buscar en la lista local como fallback si realmente no viene del backend
-          if (!proveedorNormalizado && compra.proveedor_id) {
-            console.log(`🔍 [COMPRAS] Proveedor no viene poblado del backend, buscando en lista local para compra ${compra._id}`);
+          if (!proveedorNormalizado && proveedorId && proveedores.length > 0) {
+            console.log(`🔍 [COMPRAS] Proveedor no viene poblado del backend, buscando en lista local para compra ${compra._id}, proveedor_id: ${proveedorId}`);
+            console.log(`📋 [COMPRAS] Proveedores disponibles (${proveedores.length}):`, proveedores.map(p => ({ id: p._id, nombre: p.nombre })));
+            
             // Buscar el proveedor en la lista cargada con múltiples estrategias de match
             const proveedorEncontrado = proveedores.find(
               (p: Proveedor) => {
-                const match1 = p._id === compra.proveedor_id;
-                const match2 = p._id?.toString() === compra.proveedor_id?.toString();
-                const match3 = compra.proveedor_id && p._id && String(p._id) === String(compra.proveedor_id);
-                const match4 = compra.proveedor_id && p._id && p._id.toString().toLowerCase() === compra.proveedor_id.toString().toLowerCase();
+                const idProveedor = String(p._id || "");
+                const idCompra = String(proveedorId || "");
+                const match1 = p._id === proveedorId;
+                const match2 = idProveedor === idCompra;
+                const match3 = idProveedor.toLowerCase() === idCompra.toLowerCase();
+                const match4 = p._id?.toString() === proveedorId?.toString();
                 return match1 || match2 || match3 || match4;
               }
             );
             
             if (proveedorEncontrado) {
               proveedorNormalizado = proveedorEncontrado;
-              console.log("✅ [COMPRAS] Proveedor encontrado en lista local:", proveedorEncontrado.nombre, "ID:", proveedorEncontrado._id);
+              console.log(`✅ [COMPRAS] Proveedor encontrado en lista local: ${proveedorEncontrado.nombre}, ID: ${proveedorEncontrado._id}, días crédito: ${proveedorEncontrado.dias_credito}`);
             } else {
-              // Si no se encuentra, crear un objeto básico
+              // Si no se encuentra, crear un objeto básico usando proveedor_nombre si está disponible
               proveedorNormalizado = {
-                _id: compra.proveedor_id,
-                nombre: compra.proveedor_nombre || "Proveedor no encontrado",
+                _id: proveedorId,
+                nombre: compra.proveedor_nombre || compra.proveedorNombre || "Proveedor no encontrado",
                 rif: "",
                 telefono: "",
                 dias_credito: compra.dias_credito || 0,
                 descuento_comercial: 0,
                 descuento_pronto_pago: 0
               };
-              console.warn("⚠️ [COMPRAS] Proveedor no encontrado para compra:", compra._id, "proveedor_id:", compra.proveedor_id);
+              console.warn(`⚠️ [COMPRAS] Proveedor no encontrado para compra ${compra._id}, proveedor_id: ${proveedorId}`);
+              console.warn(`📋 [COMPRAS] IDs de proveedores disponibles:`, proveedores.map(p => p._id));
             }
           } else if (proveedorNormalizado) {
             // El backend envió el proveedor poblado
             console.log(`✅ [COMPRAS] Usando proveedor del backend: ${proveedorNormalizado.nombre}, días crédito: ${proveedorNormalizado.dias_credito}, desc pronto pago: ${proveedorNormalizado.descuento_pronto_pago}`);
+          } else if (!proveedorId) {
+            // No hay proveedor_id en la compra
+            console.warn(`⚠️ [COMPRAS] Compra ${compra._id} no tiene proveedor_id`);
+            proveedorNormalizado = {
+              _id: "",
+              nombre: "Sin proveedor",
+              rif: "",
+              telefono: "",
+              dias_credito: 0,
+              descuento_comercial: 0,
+              descuento_pronto_pago: 0
+            };
           }
 
           // Normalizar fecha antes de usarla
@@ -240,7 +260,7 @@ const CuentasPorPagarPage: React.FC = () => {
             fecha_compra: compra.fecha_compra,
             fecha_creacion: compra.fecha_creacion,
             proveedor: proveedorNormalizado,
-            proveedor_id: compra.proveedor_id || compra.proveedorId || "",
+            proveedor_id: proveedorId || compra.proveedor_id || compra.proveedorId || "",
             sucursal_id: sucursalId,
             items: items, // Normalizar items/productos
             estado,
@@ -334,7 +354,9 @@ const CuentasPorPagarPage: React.FC = () => {
   useEffect(() => {
     // Cargar proveedores primero, luego compras y sucursales
     const cargarDatos = async () => {
-      await fetchProveedores();
+      const proveedoresCargados = await fetchProveedores();
+      // Esperar un momento para asegurar que los proveedores estén en el estado
+      await new Promise(resolve => setTimeout(resolve, 100));
       await fetchCompras();
       fetchSucursales();
     };
@@ -345,24 +367,34 @@ const CuentasPorPagarPage: React.FC = () => {
   useEffect(() => {
     if (proveedores.length > 0 && compras.length > 0) {
       console.log("🔄 [COMPRAS] Actualizando compras con proveedores cargados");
-      console.log("📦 [COMPRAS] Proveedores disponibles:", proveedores.map(p => ({ id: p._id, nombre: p.nombre })));
+      console.log("📦 [COMPRAS] Proveedores disponibles:", proveedores.map(p => ({ id: p._id, nombre: p.nombre, dias_credito: p.dias_credito })));
       
       // Actualizar compras con proveedores encontrados
       const comprasActualizadas = compras.map((compra) => {
-        if (!compra.proveedor || compra.proveedor.nombre === "Proveedor no encontrado") {
-          console.log(`🔍 [COMPRAS] Buscando proveedor para compra ${compra._id}, proveedor_id: ${compra.proveedor_id}`);
+        // Normalizar proveedor_id
+        const proveedorId = compra.proveedor_id || compra.proveedorId || "";
+        
+        // Si no tiene proveedor o el proveedor es "Proveedor no encontrado" o "Sin proveedor", buscar
+        if (!compra.proveedor || 
+            compra.proveedor.nombre === "Proveedor no encontrado" || 
+            compra.proveedor.nombre === "Sin proveedor" ||
+            !compra.proveedor.dias_credito) {
+          console.log(`🔍 [COMPRAS] Buscando proveedor para compra ${compra._id}, proveedor_id: ${proveedorId}`);
           
           const proveedorEncontrado = proveedores.find(
             (p: Proveedor) => {
-              const match1 = p._id === compra.proveedor_id;
-              const match2 = p._id?.toString() === compra.proveedor_id?.toString();
-              const match3 = compra.proveedor_id && p._id && String(p._id) === String(compra.proveedor_id);
-              return match1 || match2 || match3;
+              const idProveedor = String(p._id || "");
+              const idCompra = String(proveedorId || "");
+              const match1 = p._id === proveedorId;
+              const match2 = idProveedor === idCompra;
+              const match3 = idProveedor.toLowerCase() === idCompra.toLowerCase();
+              const match4 = p._id?.toString() === proveedorId?.toString();
+              return match1 || match2 || match3 || match4;
             }
           );
           
           if (proveedorEncontrado) {
-            console.log(`✅ [COMPRAS] Proveedor encontrado: ${proveedorEncontrado.nombre}`);
+            console.log(`✅ [COMPRAS] Proveedor encontrado: ${proveedorEncontrado.nombre}, días crédito: ${proveedorEncontrado.dias_credito}`);
             
             // Recalcular días restantes con el proveedor correcto
             let diasRestantes = 0;
@@ -385,23 +417,35 @@ const CuentasPorPagarPage: React.FC = () => {
                 const diferenciaMs = fechaVencimiento.getTime() - hoy.getTime();
                 diasRestantes = Math.ceil(diferenciaMs / (1000 * 60 * 60 * 24));
                 enMora = diasRestantes < 0 && compra.estado !== "pagada";
+                
+                console.log(`📅 [COMPRAS] Compra ${compra._id}: Días crédito: ${diasCredito}, Días restantes: ${diasRestantes}, En mora: ${enMora}`);
               } else {
-                console.warn(`⚠️ [COMPRAS] Fecha inválida para compra ${compra._id}: ${compra.fecha}`);
+                console.warn(`⚠️ [COMPRAS] Fecha inválida para compra ${compra._id}: ${fechaCompraNormalizada}`);
               }
+            } else {
+              console.log(`ℹ️ [COMPRAS] Compra ${compra._id}: Sin fecha (${fechaCompraNormalizada}) o sin días de crédito (${diasCredito})`);
             }
             
             return {
               ...compra,
-              fecha: fechaCompraNormalizada || compra.fecha || new Date().toISOString().split('T')[0], // Asegurar que fecha siempre tenga un valor
+              fecha: fechaCompraNormalizada || compra.fecha || new Date().toISOString().split('T')[0],
               proveedor: proveedorEncontrado,
+              proveedor_id: proveedorId,
               dias_credito: diasCredito,
               dias_restantes: diasRestantes,
               en_mora: enMora,
               fecha_vencimiento: fechaVencimiento || undefined,
             };
           } else {
-            console.warn(`⚠️ [COMPRAS] Proveedor NO encontrado para compra ${compra._id}, proveedor_id: ${compra.proveedor_id}`);
+            console.warn(`⚠️ [COMPRAS] Proveedor NO encontrado para compra ${compra._id}, proveedor_id: ${proveedorId}`);
             console.warn(`📋 [COMPRAS] IDs de proveedores disponibles:`, proveedores.map(p => p._id));
+            // Mantener la compra pero asegurar que tenga los campos necesarios
+            return {
+              ...compra,
+              proveedor_id: proveedorId,
+              dias_credito: compra.dias_credito || 0,
+              dias_restantes: compra.dias_restantes || 0,
+            };
           }
         }
         return compra;
