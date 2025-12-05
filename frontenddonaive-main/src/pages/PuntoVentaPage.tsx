@@ -2901,7 +2901,7 @@ const PuntoVentaPage: React.FC = () => {
                           <>${item.precio_unitario_usd.toFixed(2)} USD</>
                         )}
                         {" x "}{item.cantidad}
-                        {tasaDelDia > 0 && (
+                        {tasaDelDia > 0 && !descuentoPorDivisaActivo && (
                           <>
                             {" = "}
                             {item.descuento_aplicado ? (
@@ -2944,7 +2944,7 @@ const PuntoVentaPage: React.FC = () => {
                       />
                       <div className="text-right min-w-[100px]">
                         <div className="font-semibold text-xs">${(item.subtotal_usd || 0).toFixed(2)}</div>
-                        {tasaDelDia > 0 && (
+                        {tasaDelDia > 0 && !descuentoPorDivisaActivo && (
                           <div className="text-xs text-gray-600">
                             {(item.subtotal || 0).toLocaleString("es-VE", {
                               minimumFractionDigits: 2,
@@ -3032,7 +3032,7 @@ const PuntoVentaPage: React.FC = () => {
                 <span>Total (USD):</span>
                 <span className="font-semibold">${calcularTotalUsd().toFixed(2)}</span>
               </div>
-              {tasaDelDia > 0 && (
+              {tasaDelDia > 0 && !descuentoPorDivisaActivo && (
                 <div className="flex justify-between text-sm">
                   <span>Total (Bs):</span>
                   <span className="font-semibold">
