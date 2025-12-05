@@ -147,6 +147,10 @@ const PuntoVentaPage: React.FC = () => {
   const [telefonoCliente, setTelefonoCliente] = useState("");
   const [porcentajeDescuentoCliente, setPorcentajeDescuentoCliente] = useState("");
   
+  // Estados para descuento por divisa
+  const [descuentoPorDivisaActivo, setDescuentoPorDivisaActivo] = useState(false);
+  const [porcentajeDescuentoDivisa, setPorcentajeDescuentoDivisa] = useState("");
+  
   // Estados para cerrar caja
   const [showCerrarCajaModal, setShowCerrarCajaModal] = useState(false);
   
@@ -1027,12 +1031,22 @@ const PuntoVentaPage: React.FC = () => {
   };
 
   // Función para calcular precio con descuento
-  const calcularPrecioConDescuento = (precioOriginal: number, porcentajeDescuento?: number): number => {
-    if (!porcentajeDescuento || porcentajeDescuento <= 0) {
-      return precioOriginal;
+  const calcularPrecioConDescuento = (precioOriginal: number, porcentajeDescuento?: number, porcentajeDescuentoDivisa?: number): number => {
+    let precioFinal = precioOriginal;
+    
+    // Aplicar descuento del cliente si existe
+    if (porcentajeDescuento && porcentajeDescuento > 0) {
+      const descuento = precioFinal * (porcentajeDescuento / 100);
+      precioFinal = precioFinal - descuento;
     }
-    const descuento = precioOriginal * (porcentajeDescuento / 100);
-    return precioOriginal - descuento;
+    
+    // Aplicar descuento por divisa si está activo y el pago es en USD
+    if (descuentoPorDivisaActivo && porcentajeDescuentoDivisa && porcentajeDescuentoDivisa > 0) {
+      const descuentoDivisa = precioFinal * (porcentajeDescuentoDivisa / 100);
+      precioFinal = precioFinal - descuentoDivisa;
+    }
+    
+    return precioFinal;
   };
 
   const handleAgregarAlCarrito = () => {
@@ -1068,10 +1082,16 @@ const PuntoVentaPage: React.FC = () => {
     const precioUnitarioOriginalUSD = productoSeleccionado.precio_usd || productoSeleccionado.precio;
     const precioUnitarioOriginalBs = precioUnitarioOriginalUSD * tasaDelDia;
     
-    // Aplicar descuento del cliente si existe
+    // Aplicar descuentos (cliente y divisa)
     const porcentajeDescuento = clienteSeleccionado?.porcentaje_descuento || 0;
-    const precioUnitarioUSD = calcularPrecioConDescuento(precioUnitarioOriginalUSD, porcentajeDescuento);
-    const precioUnitarioBs = calcularPrecioConDescuento(precioUnitarioOriginalBs, porcentajeDescuento);
+    const porcentajeDescuentoDivisa = descuentoPorDivisaActivo ? (parseFloat(porcentajeDescuentoDivisa) || 0) : 0;
+    const precioUnitarioUSD = calcularPrecioConDescuento(precioUnitarioOriginalUSD, porcentajeDescuento, porcentajeDescuentoDivisa);
+    const precioUnitarioBs = calcularPrecioConDescuento(precioUnitarioOriginalBs, porcentajeDescuento, porcentajeDescuentoDivisa);
+    
+    // Calcular el descuento total aplicado para mostrar
+    const descuentoTotal = porcentajeDescuento > 0 || porcentajeDescuentoDivisa > 0 
+      ? porcentajeDescuento + porcentajeDescuentoDivisa 
+      : undefined;
     
     const subtotalUSD = precioUnitarioUSD * cantidad;
     const subtotalBs = precioUnitarioBs * cantidad;
@@ -1085,7 +1105,7 @@ const PuntoVentaPage: React.FC = () => {
       precio_unitario_original_usd: precioUnitarioOriginalUSD,
       subtotal: subtotalBs,
       subtotal_usd: subtotalUSD,
-      descuento_aplicado: porcentajeDescuento > 0 ? porcentajeDescuento : undefined,
+      descuento_aplicado: descuentoTotal,
     };
 
     if (itemExistente) {
@@ -1101,7 +1121,7 @@ const PuntoVentaPage: React.FC = () => {
                 precio_unitario_original_usd: precioUnitarioOriginalUSD,
                 subtotal: (item.cantidad + cantidad) * precioUnitarioBs,
                 subtotal_usd: (item.cantidad + cantidad) * precioUnitarioUSD,
-                descuento_aplicado: porcentajeDescuento > 0 ? porcentajeDescuento : undefined,
+                descuento_aplicado: descuentoTotal,
               }
             : item
         )
@@ -1149,19 +1169,24 @@ const PuntoVentaPage: React.FC = () => {
     );
   };
 
-  // Recalcular precios del carrito cuando se selecciona o cambia un cliente
+  // Recalcular precios del carrito cuando se selecciona o cambia un cliente o el descuento por divisa
   useEffect(() => {
     if (carrito.length === 0) return;
     
     const porcentajeDescuento = clienteSeleccionado?.porcentaje_descuento || 0;
+    const porcentajeDescuentoDivisa = descuentoPorDivisaActivo ? (parseFloat(porcentajeDescuentoDivisa) || 0) : 0;
     
     setCarrito(
       carrito.map((item) => {
         const precioOriginalUSD = item.precio_unitario_original_usd || item.precio_unitario_usd;
         const precioOriginalBs = item.precio_unitario_original || (precioOriginalUSD * tasaDelDia);
         
-        const precioConDescuentoUSD = calcularPrecioConDescuento(precioOriginalUSD, porcentajeDescuento);
-        const precioConDescuentoBs = calcularPrecioConDescuento(precioOriginalBs, porcentajeDescuento);
+        const precioConDescuentoUSD = calcularPrecioConDescuento(precioOriginalUSD, porcentajeDescuento, porcentajeDescuentoDivisa);
+        const precioConDescuentoBs = calcularPrecioConDescuento(precioOriginalBs, porcentajeDescuento, porcentajeDescuentoDivisa);
+        
+        const descuentoTotal = porcentajeDescuento > 0 || porcentajeDescuentoDivisa > 0 
+          ? porcentajeDescuento + porcentajeDescuentoDivisa 
+          : undefined;
         
         return {
           ...item,
@@ -1171,11 +1196,11 @@ const PuntoVentaPage: React.FC = () => {
           precio_unitario_original_usd: precioOriginalUSD,
           subtotal: item.cantidad * precioConDescuentoBs,
           subtotal_usd: item.cantidad * precioConDescuentoUSD,
-          descuento_aplicado: porcentajeDescuento > 0 ? porcentajeDescuento : undefined,
+          descuento_aplicado: descuentoTotal,
         };
       })
     );
-  }, [clienteSeleccionado?.porcentaje_descuento]);
+  }, [clienteSeleccionado?.porcentaje_descuento, descuentoPorDivisaActivo, porcentajeDescuentoDivisa]);
 
   const calcularTotalBs = () => {
     return carrito.reduce((sum, item) => sum + item.subtotal, 0);
@@ -1350,12 +1375,17 @@ const PuntoVentaPage: React.FC = () => {
       const porcentajeDescuento = clienteSeleccionado?.porcentaje_descuento || 0;
       
       // Recalcular subtotales en Bs con descuento aplicado
+      const porcentajeDescuentoDivisa = descuentoPorDivisaActivo ? (parseFloat(porcentajeDescuentoDivisa) || 0) : 0;
       setCarrito(
         carrito.map((item) => {
           const precioOriginalUSD = item.precio_unitario_original_usd || item.precio_unitario_usd;
           const precioOriginalBs = precioOriginalUSD * nuevaTasa;
-          const precioConDescuentoUSD = calcularPrecioConDescuento(precioOriginalUSD, porcentajeDescuento);
-          const precioConDescuentoBs = calcularPrecioConDescuento(precioOriginalBs, porcentajeDescuento);
+          const precioConDescuentoUSD = calcularPrecioConDescuento(precioOriginalUSD, porcentajeDescuento, porcentajeDescuentoDivisa);
+          const precioConDescuentoBs = calcularPrecioConDescuento(precioOriginalBs, porcentajeDescuento, porcentajeDescuentoDivisa);
+          
+          const descuentoTotal = porcentajeDescuento > 0 || porcentajeDescuentoDivisa > 0 
+            ? porcentajeDescuento + porcentajeDescuentoDivisa 
+            : undefined;
           
           return {
             ...item,
@@ -1365,7 +1395,7 @@ const PuntoVentaPage: React.FC = () => {
             precio_unitario_original_usd: precioOriginalUSD,
             subtotal: item.cantidad * precioConDescuentoBs,
             subtotal_usd: item.cantidad * precioConDescuentoUSD,
-            descuento_aplicado: porcentajeDescuento > 0 ? porcentajeDescuento : undefined,
+            descuento_aplicado: descuentoTotal,
           };
         })
       );
@@ -1870,6 +1900,7 @@ const PuntoVentaPage: React.FC = () => {
         cajero: usuario?.correo || cajeroSeleccionado.NOMBRE,
         cliente: clienteSeleccionado?._id || clienteSeleccionado?.id || "",
         porcentaje_descuento: clienteSeleccionado?.porcentaje_descuento || 0,
+        descuento_por_divisa: descuentoPorDivisaActivo ? (parseFloat(porcentajeDescuentoDivisa) || 0) : 0,
         notas: "",
       };
       
@@ -2953,6 +2984,49 @@ const PuntoVentaPage: React.FC = () => {
                 </div>
               </div>
             )}
+            
+            {/* Descuento por divisa */}
+            <div className="bg-blue-50 border border-blue-200 rounded p-2 mb-3">
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="descuentoDivisa"
+                  checked={descuentoPorDivisaActivo}
+                  onChange={(e) => {
+                    setDescuentoPorDivisaActivo(e.target.checked);
+                    if (!e.target.checked) {
+                      setPorcentajeDescuentoDivisa("");
+                    }
+                  }}
+                  className="w-4 h-4"
+                />
+                <label htmlFor="descuentoDivisa" className="text-sm font-semibold text-blue-700 cursor-pointer">
+                  Descuento por pago en divisas (USD)
+                </label>
+              </div>
+              {descuentoPorDivisaActivo && (
+                <div className="mt-2">
+                  <Input
+                    type="number"
+                    placeholder="% Descuento"
+                    value={porcentajeDescuentoDivisa}
+                    onChange={(e) => {
+                      const valor = e.target.value;
+                      if (valor === "" || (parseFloat(valor) >= 0 && parseFloat(valor) <= 100)) {
+                        setPorcentajeDescuentoDivisa(valor);
+                      }
+                    }}
+                    className="w-full"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                  />
+                  <div className="text-xs text-blue-600 mt-1">
+                    Se aplicará a todos los productos cuando el pago sea en USD
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="space-y-2 mb-2 flex-shrink-0">
               <div className="flex justify-between text-sm">
                 <span>Total (USD):</span>

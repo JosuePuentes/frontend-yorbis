@@ -56,20 +56,32 @@ export const fetchWithAuth = async (
 
   console.log('[fetchWithAuth] Headers finales:', headers);
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
 
-  // Si el token es inválido o expirado, redirigir a login
-  if (response.status === 401 || response.status === 403) {
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("usuario");
-    window.location.href = "/login";
-    throw new Error("Token inválido o expirado");
+    // Si el token es inválido o expirado, redirigir a login
+    if (response.status === 401 || response.status === 403) {
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("usuario");
+      window.location.href = "/login";
+      throw new Error("Token inválido o expirado");
+    }
+
+    return response;
+  } catch (error: any) {
+    // Manejar errores de CORS
+    if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+      console.error('[fetchWithAuth] ❌ Error de CORS o conexión:', error);
+      throw new Error(
+        'Error de conexión con el servidor. Por favor, verifica que el backend esté configurado correctamente para permitir peticiones desde este origen. ' +
+        'Si eres el administrador, asegúrate de que el backend tenga configurado CORS para permitir el origen del frontend.'
+      );
+    }
+    throw error;
   }
-
-  return response;
 };
 
 /**
