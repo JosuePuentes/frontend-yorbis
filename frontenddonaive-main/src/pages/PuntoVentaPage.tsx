@@ -2412,10 +2412,16 @@ const PuntoVentaPage: React.FC = () => {
                   const estaVencido = fechaVencDate && fechaVencDate < hoy;
                   const estaPorVencer = fechaVencDate && fechaVencDate >= hoy && fechaVencDate <= new Date(hoy.getTime() + 30 * 24 * 60 * 60 * 1000);
                   
+                  // Normalizar datos del producto
+                  const codigo = producto.codigo || producto.codigo_producto || "";
+                  const descripcion = producto.descripcion || producto.nombre || producto.descripcion_producto || "";
+                  const marca = producto.marca || producto.marca_producto || "";
+                  const precioVenta = producto.precio_usd || producto.precio || producto.precio_unitario || producto.precio_venta || 0;
+                  
                   return (
                     <div
                       key={producto.id}
-                      className="w-full p-2 rounded border hover:bg-blue-50 transition-colors"
+                      className="w-full p-3 rounded border hover:bg-blue-50 transition-colors bg-white"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <button
@@ -2427,11 +2433,21 @@ const PuntoVentaPage: React.FC = () => {
                               : 'cursor-not-allowed opacity-50'
                           }`}
                         >
-                          <div className="font-semibold text-sm truncate">{producto.nombre}</div>
+                          {/* Código */}
+                          {codigo && (
+                            <div className="font-bold text-sm text-blue-600 mb-1">Código: {codigo}</div>
+                          )}
+                          {/* Descripción */}
+                          <div className="font-semibold text-sm text-slate-800 mb-1">{descripcion}</div>
+                          {/* Marca */}
+                          {marca && (
+                            <div className="text-xs text-slate-600 mb-1">Marca: {marca}</div>
+                          )}
+                          {/* Precio de Venta */}
+                          <div className="text-sm font-bold text-green-600 mb-1">
+                            Precio: ${precioVenta.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
                           <div className="flex items-center gap-2 mt-0.5 flex-wrap text-xs">
-                            {producto.codigo && (
-                              <div className="text-xs text-gray-500">Código: {producto.codigo}</div>
-                            )}
                             {primerLote && (
                               <>
                                 <div className="text-xs text-gray-600">
@@ -2455,10 +2471,6 @@ const PuntoVentaPage: React.FC = () => {
                           </div>
                         </button>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          {/* Precio */}
-                          <div className={`text-right font-semibold text-sm ${tieneStock ? 'text-green-600' : 'text-red-600'}`}>
-                            ${precio.toFixed(2)}
-                          </div>
                           {/* Stock con dropdown */}
                           <div className="relative stock-dropdown-container">
                             <button
