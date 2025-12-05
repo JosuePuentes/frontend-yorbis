@@ -1084,13 +1084,13 @@ const PuntoVentaPage: React.FC = () => {
     
     // Aplicar descuentos (cliente y divisa)
     const porcentajeDescuento = clienteSeleccionado?.porcentaje_descuento || 0;
-    const porcentajeDescuentoDivisa = descuentoPorDivisaActivo ? (parseFloat(porcentajeDescuentoDivisa) || 0) : 0;
-    const precioUnitarioUSD = calcularPrecioConDescuento(precioUnitarioOriginalUSD, porcentajeDescuento, porcentajeDescuentoDivisa);
-    const precioUnitarioBs = calcularPrecioConDescuento(precioUnitarioOriginalBs, porcentajeDescuento, porcentajeDescuentoDivisa);
+    const porcentajeDescuentoDivisaValor = descuentoPorDivisaActivo ? (parseFloat(porcentajeDescuentoDivisa) || 0) : 0;
+    const precioUnitarioUSD = calcularPrecioConDescuento(precioUnitarioOriginalUSD, porcentajeDescuento, porcentajeDescuentoDivisaValor);
+    const precioUnitarioBs = calcularPrecioConDescuento(precioUnitarioOriginalBs, porcentajeDescuento, porcentajeDescuentoDivisaValor);
     
     // Calcular el descuento total aplicado para mostrar
-    const descuentoTotal = porcentajeDescuento > 0 || porcentajeDescuentoDivisa > 0 
-      ? porcentajeDescuento + porcentajeDescuentoDivisa 
+    const descuentoTotal = porcentajeDescuento > 0 || porcentajeDescuentoDivisaValor > 0 
+      ? porcentajeDescuento + porcentajeDescuentoDivisaValor 
       : undefined;
     
     const subtotalUSD = precioUnitarioUSD * cantidad;
@@ -1174,18 +1174,18 @@ const PuntoVentaPage: React.FC = () => {
     if (carrito.length === 0) return;
     
     const porcentajeDescuento = clienteSeleccionado?.porcentaje_descuento || 0;
-    const porcentajeDescuentoDivisa = descuentoPorDivisaActivo ? (parseFloat(porcentajeDescuentoDivisa) || 0) : 0;
+    const porcentajeDescuentoDivisaValor = descuentoPorDivisaActivo ? (parseFloat(porcentajeDescuentoDivisa) || 0) : 0;
     
     setCarrito(
       carrito.map((item) => {
         const precioOriginalUSD = item.precio_unitario_original_usd || item.precio_unitario_usd;
         const precioOriginalBs = item.precio_unitario_original || (precioOriginalUSD * tasaDelDia);
         
-        const precioConDescuentoUSD = calcularPrecioConDescuento(precioOriginalUSD, porcentajeDescuento, porcentajeDescuentoDivisa);
-        const precioConDescuentoBs = calcularPrecioConDescuento(precioOriginalBs, porcentajeDescuento, porcentajeDescuentoDivisa);
+        const precioConDescuentoUSD = calcularPrecioConDescuento(precioOriginalUSD, porcentajeDescuento, porcentajeDescuentoDivisaValor);
+        const precioConDescuentoBs = calcularPrecioConDescuento(precioOriginalBs, porcentajeDescuento, porcentajeDescuentoDivisaValor);
         
-        const descuentoTotal = porcentajeDescuento > 0 || porcentajeDescuentoDivisa > 0 
-          ? porcentajeDescuento + porcentajeDescuentoDivisa 
+        const descuentoTotal = porcentajeDescuento > 0 || porcentajeDescuentoDivisaValor > 0 
+          ? porcentajeDescuento + porcentajeDescuentoDivisaValor 
           : undefined;
         
         return {
@@ -1375,16 +1375,16 @@ const PuntoVentaPage: React.FC = () => {
       const porcentajeDescuento = clienteSeleccionado?.porcentaje_descuento || 0;
       
       // Recalcular subtotales en Bs con descuento aplicado
-      const porcentajeDescuentoDivisa = descuentoPorDivisaActivo ? (parseFloat(porcentajeDescuentoDivisa) || 0) : 0;
+      const porcentajeDescuentoDivisaValor = descuentoPorDivisaActivo ? (parseFloat(porcentajeDescuentoDivisa) || 0) : 0;
       setCarrito(
         carrito.map((item) => {
           const precioOriginalUSD = item.precio_unitario_original_usd || item.precio_unitario_usd;
           const precioOriginalBs = precioOriginalUSD * nuevaTasa;
-          const precioConDescuentoUSD = calcularPrecioConDescuento(precioOriginalUSD, porcentajeDescuento, porcentajeDescuentoDivisa);
-          const precioConDescuentoBs = calcularPrecioConDescuento(precioOriginalBs, porcentajeDescuento, porcentajeDescuentoDivisa);
+          const precioConDescuentoUSD = calcularPrecioConDescuento(precioOriginalUSD, porcentajeDescuento, porcentajeDescuentoDivisaValor);
+          const precioConDescuentoBs = calcularPrecioConDescuento(precioOriginalBs, porcentajeDescuento, porcentajeDescuentoDivisaValor);
           
-          const descuentoTotal = porcentajeDescuento > 0 || porcentajeDescuentoDivisa > 0 
-            ? porcentajeDescuento + porcentajeDescuentoDivisa 
+          const descuentoTotal = porcentajeDescuento > 0 || porcentajeDescuentoDivisaValor > 0 
+            ? porcentajeDescuento + porcentajeDescuentoDivisaValor 
             : undefined;
           
           return {
