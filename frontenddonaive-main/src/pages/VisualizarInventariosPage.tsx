@@ -45,7 +45,7 @@ const VisualizarInventariosPage: React.FC = () => {
   const [todosLosProductos, setTodosLosProductos] = useState<any[]>([]);
   const [cargandoProductos, setCargandoProductos] = useState(false);
   const [busquedaProducto, setBusquedaProducto] = useState("");
-  const [vistaTabla, setVistaTabla] = useState(false); // false = vista inventarios, true = vista tabla productos
+  const [vistaTabla, setVistaTabla] = useState(true); // true = vista tabla productos (PREDETERMINADA), false = vista inventarios
 
   const fetchInventarios = async (): Promise<Inventario[]> => {
     setLoading(true);
@@ -203,15 +203,23 @@ const VisualizarInventariosPage: React.FC = () => {
     }
   };
 
+  // Cargar productos al montar el componente (vista tabla es predeterminada)
+  useEffect(() => {
+    if (vistaTabla && todosLosProductos.length === 0 && !cargandoProductos) {
+      console.log("🔄 [INVENTARIOS] Cargando productos iniciales...");
+      cargarTodosLosProductos();
+    }
+  }, [vistaTabla, todosLosProductos.length, cargandoProductos]);
+  
   // Cargar productos cuando se cambia a vista tabla
   useEffect(() => {
     if (vistaTabla && todosLosProductos.length === 0 && !cargandoProductos) {
       console.log("🔄 [INVENTARIOS] Cambiando a vista tabla, cargando productos...");
       cargarTodosLosProductos();
     }
-  }, [vistaTabla, todosLosProductos.length, cargandoProductos]);
+  }, [vistaTabla]);
 
-  // Filtrar productos según búsqueda
+  // Filtrar productos según búsqueda (solo por código y descripción)
   const productosFiltrados = useMemo(() => {
     if (!busquedaProducto.trim()) {
       return todosLosProductos;
@@ -221,19 +229,16 @@ const VisualizarInventariosPage: React.FC = () => {
     return todosLosProductos.filter((producto: any) => {
       const codigo = (producto.codigo || "").toLowerCase();
       const descripcion = (producto.descripcion || "").toLowerCase();
-      const marca = (producto.marca || "").toLowerCase();
-      const sucursal = (producto.sucursal_nombre || "").toLowerCase();
       
       return codigo.includes(busquedaLower) ||
-             descripcion.includes(busquedaLower) ||
-             marca.includes(busquedaLower) ||
-             sucursal.includes(busquedaLower);
+             descripcion.includes(busquedaLower);
     });
   }, [todosLosProductos, busquedaProducto]);
 
   // Calcular totales
   const totales = useMemo(() => {
     const totalItems = productosFiltrados.length;
+    // Total Costo Inventario = suma de (costo * existencia) de todos los productos
     const totalCostoInventario = productosFiltrados.reduce((sum, producto: any) => {
       const cantidad = Number(producto.cantidad || producto.existencia || 0);
       const costo = Number(producto.costo_unitario || producto.costo || 0);
@@ -245,6 +250,14 @@ const VisualizarInventariosPage: React.FC = () => {
       totalCostoInventario
     };
   }, [productosFiltrados]);
+
+  // Cargar productos al montar el componente
+  useEffect(() => {
+    if (todosLosProductos.length === 0 && !cargandoProductos) {
+      console.log("🔄 [INVENTARIOS] Cargando productos iniciales...");
+      cargarTodosLosProductos();
+    }
+  }, []);
 
   // Cargar totales de existencias y costo total para cada inventario
   useEffect(() => {
@@ -693,18 +706,17 @@ const VisualizarInventariosPage: React.FC = () => {
           <div className="bg-white rounded-lg shadow-xl overflow-hidden">
             {/* Navbar con totales */}
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
                 <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
-                  <div className="text-sm font-medium opacity-90 mb-1">Total de Items</div>
-                  <div className="text-3xl font-bold">{totales.totalItems.toLocaleString('es-VE')}</div>
-                </div>
-                <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
-                  <div className="text-sm font-medium opacity-90 mb-1">Total Costo Inventario</div>
+                  <div className="text-sm font-medium opacity-90 mb-1">Total Inventario (Costo × Cantidad)</div>
                   <div className="text-3xl font-bold">
                     ${totales.totalCostoInventario.toLocaleString('es-VE', { 
                       minimumFractionDigits: 2, 
                       maximumFractionDigits: 2 
                     })}
+                  </div>
+                  <div className="text-xs opacity-75 mt-1">
+                    {totales.totalItems.toLocaleString('es-VE')} productos únicos
                   </div>
                 </div>
               </div>
@@ -716,7 +728,7 @@ const VisualizarInventariosPage: React.FC = () => {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
                 <Input
                   type="text"
-                  placeholder="Buscar por código, descripción, marca o sucursal..."
+                  placeholder="Buscar por código o descripción..."
                   value={busquedaProducto}
                   onChange={(e) => setBusquedaProducto(e.target.value)}
                   className="pl-10 w-full"
@@ -745,6 +757,8 @@ const VisualizarInventariosPage: React.FC = () => {
                 <table className="min-w-full divide-y divide-slate-200">
                   <thead className="bg-slate-100 sticky top-0 z-10">
                     <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Sucursal</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Fecha de Carga</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Código</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Descripción</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Marca</th>
@@ -752,8 +766,7 @@ const VisualizarInventariosPage: React.FC = () => {
                       <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Utilidad</th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Precio</th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Existencia</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Sucursal</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Fecha Carga</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Total $</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-200">
@@ -763,9 +776,14 @@ const VisualizarInventariosPage: React.FC = () => {
                       const cantidad = Number(producto.cantidad || producto.existencia || 0);
                       const utilidad = Number(producto.utilidad || (precio - costo));
                       const porcentajeGanancia = Number(producto.porcentaje_ganancia || ((precio - costo) / (costo || 1)) * 100);
+                      const total = costo * cantidad; // Total = Costo × Cantidad
                       
                       return (
                         <tr key={producto._id || producto.id || index} className="hover:bg-slate-50">
+                          <td className="px-4 py-3 text-sm text-slate-700">{producto.sucursal_nombre || producto.sucursal_id || "-"}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
+                            {producto.fecha_carga ? new Date(producto.fecha_carga).toLocaleDateString('es-VE') : "-"}
+                          </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-slate-900">{producto.codigo || "-"}</td>
                           <td className="px-4 py-3 text-sm text-slate-700">{producto.descripcion || "-"}</td>
                           <td className="px-4 py-3 text-sm text-slate-600">{producto.marca || "-"}</td>
@@ -780,9 +798,8 @@ const VisualizarInventariosPage: React.FC = () => {
                             ${precio.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                           <td className="px-4 py-3 text-sm text-right text-slate-700">{cantidad.toLocaleString('es-VE')}</td>
-                          <td className="px-4 py-3 text-sm text-slate-700">{producto.sucursal_nombre || producto.sucursal_id || "-"}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600">
-                            {producto.fecha_carga ? new Date(producto.fecha_carga).toLocaleDateString('es-VE') : "-"}
+                          <td className="px-4 py-3 text-sm text-right font-semibold text-slate-900">
+                            ${total.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                         </tr>
                       );
@@ -790,7 +807,7 @@ const VisualizarInventariosPage: React.FC = () => {
                   </tbody>
                   <tfoot className="bg-slate-50 sticky bottom-0">
                     <tr>
-                      <td colSpan={3} className="px-4 py-3 text-sm font-bold text-slate-900">TOTALES</td>
+                      <td colSpan={5} className="px-4 py-3 text-sm font-bold text-slate-900">TOTALES</td>
                       <td className="px-4 py-3 text-sm text-right font-bold text-slate-900">
                         ${productosFiltrados.reduce((sum, p: any) => sum + Number(p.costo_unitario || p.costo || 0), 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
@@ -807,7 +824,13 @@ const VisualizarInventariosPage: React.FC = () => {
                       <td className="px-4 py-3 text-sm text-right font-bold text-slate-900">
                         {productosFiltrados.reduce((sum, p: any) => sum + Number(p.cantidad || p.existencia || 0), 0).toLocaleString('es-VE')}
                       </td>
-                      <td colSpan={2}></td>
+                      <td className="px-4 py-3 text-sm text-right font-bold text-blue-600">
+                        ${productosFiltrados.reduce((sum, p: any) => {
+                          const cantidad = Number(p.cantidad || p.existencia || 0);
+                          const costo = Number(p.costo_unitario || p.costo || 0);
+                          return sum + (cantidad * costo);
+                        }, 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
                     </tr>
                   </tfoot>
                 </table>
