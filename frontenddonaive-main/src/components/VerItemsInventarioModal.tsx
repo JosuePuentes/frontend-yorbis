@@ -83,8 +83,25 @@ const VerItemsInventarioModal: React.FC<VerItemsInventarioModalProps> = ({
             if (resAlt1.ok) {
               const data = await resAlt1.json();
               const itemsArray = Array.isArray(data) ? data : (data.productos || data.items || []);
-              setItems(itemsArray);
-              console.log(`✅ [VerItemsInventarioModal] Items obtenidos desde endpoint alternativo: ${itemsArray.length} items`);
+              
+              // Normalizar los datos
+              const itemsNormalizados = itemsArray.map((item: any) => {
+                return {
+                  ...item,
+                  codigo: item.codigo || item.codigo_producto || "",
+                  descripcion: item.descripcion || item.nombre || item.descripcion_producto || "",
+                  marca: item.marca || item.marca_producto || "",
+                  costo: item.costo || item.costo_unitario || 0,
+                  costo_unitario: item.costo_unitario || item.costo || 0,
+                  precio: item.precio || item.precio_unitario || 0,
+                  precio_unitario: item.precio_unitario || item.precio || 0,
+                  cantidad: item.cantidad || item.existencia || item.stock || 0,
+                  existencia: item.existencia || item.cantidad || item.stock || 0,
+                };
+              });
+              
+              setItems(itemsNormalizados);
+              console.log(`✅ [VerItemsInventarioModal] Items obtenidos desde endpoint alternativo: ${itemsNormalizados.length} items`);
               return;
             }
           } catch (err) {
@@ -108,8 +125,25 @@ const VerItemsInventarioModal: React.FC<VerItemsInventarioModalProps> = ({
                 p.inventario === inventarioId ||
                 p.inventarioId === inventarioId
               );
-              setItems(itemsFiltrados);
-              console.log(`✅ [VerItemsInventarioModal] Items obtenidos desde endpoint alternativo 2: ${itemsFiltrados.length} items`);
+              
+              // Normalizar los datos
+              const itemsNormalizados = itemsFiltrados.map((item: any) => {
+                return {
+                  ...item,
+                  codigo: item.codigo || item.codigo_producto || "",
+                  descripcion: item.descripcion || item.nombre || item.descripcion_producto || "",
+                  marca: item.marca || item.marca_producto || "",
+                  costo: item.costo || item.costo_unitario || 0,
+                  costo_unitario: item.costo_unitario || item.costo || 0,
+                  precio: item.precio || item.precio_unitario || 0,
+                  precio_unitario: item.precio_unitario || item.precio || 0,
+                  cantidad: item.cantidad || item.existencia || item.stock || 0,
+                  existencia: item.existencia || item.cantidad || item.stock || 0,
+                };
+              });
+              
+              setItems(itemsNormalizados);
+              console.log(`✅ [VerItemsInventarioModal] Items obtenidos desde endpoint alternativo 2: ${itemsNormalizados.length} items`);
               return;
             }
           } catch (err) {
@@ -128,12 +162,29 @@ const VerItemsInventarioModal: React.FC<VerItemsInventarioModalProps> = ({
 
       const data = await res.json();
       const itemsArray = Array.isArray(data) ? data : [];
+      
+      // Normalizar los datos para asegurar que descripcion y marca estén disponibles
+      const itemsNormalizados = itemsArray.map((item: any) => {
+        return {
+          ...item,
+          codigo: item.codigo || item.codigo_producto || "",
+          descripcion: item.descripcion || item.nombre || item.descripcion_producto || "",
+          marca: item.marca || item.marca_producto || "",
+          costo: item.costo || item.costo_unitario || 0,
+          costo_unitario: item.costo_unitario || item.costo || 0,
+          precio: item.precio || item.precio_unitario || 0,
+          precio_unitario: item.precio_unitario || item.precio || 0,
+          cantidad: item.cantidad || item.existencia || item.stock || 0,
+          existencia: item.existencia || item.cantidad || item.stock || 0,
+        };
+      });
+      
       // Debug: ver la estructura del primer item
-      if (itemsArray.length > 0) {
-        console.log('[VerItemsInventarioModal] Estructura del primer item:', itemsArray[0]);
-        console.log('[VerItemsInventarioModal] Campos disponibles:', Object.keys(itemsArray[0]));
+      if (itemsNormalizados.length > 0) {
+        console.log('[VerItemsInventarioModal] Estructura del primer item normalizado:', itemsNormalizados[0]);
+        console.log('[VerItemsInventarioModal] Campos disponibles:', Object.keys(itemsNormalizados[0]));
       }
-      setItems(itemsArray);
+      setItems(itemsNormalizados);
     } catch (err: any) {
       setError(err.message || "Error al cargar los items del inventario");
       console.error("Error al obtener items:", err);
