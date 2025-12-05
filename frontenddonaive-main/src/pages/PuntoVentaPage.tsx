@@ -374,10 +374,78 @@ const PuntoVentaPage: React.FC = () => {
               }
             }
             
+            // Obtener precios desde compras si los productos no tienen precio
+            if (productosArray.length > 0) {
+              try {
+                const token = localStorage.getItem("access_token");
+                if (token) {
+                  const resCompras = await fetch(`${API_BASE_URL}/compras`, {
+                    headers: { "Authorization": `Bearer ${token}` },
+                    signal: abortController.signal
+                  });
+                  
+                  if (resCompras.ok && !abortController.signal.aborted) {
+                    const comprasData = await resCompras.json();
+                    const comprasArray = Array.isArray(comprasData) ? comprasData : [];
+                    
+                    // Crear mapa de precios por código
+                    const preciosMap = new Map<string, number>();
+                    comprasArray.forEach((compra: any) => {
+                      const items = compra.items || compra.productos || [];
+                      items.forEach((item: any) => {
+                        const codigo = (item.codigo || item.codigo_producto || "").toUpperCase();
+                        if (codigo) {
+                          const precioVenta = Number(item.precio_venta || item.precioVenta || item.precio_unitario || item.precio || 0);
+                          if (precioVenta > 0 && (!preciosMap.has(codigo) || preciosMap.get(codigo)! < precioVenta)) {
+                            preciosMap.set(codigo, precioVenta);
+                          } else if (precioVenta === 0) {
+                            // Calcular desde costo + utilidad
+                            const costo = Number(item.precioUnitario || item.precio_unitario || item.costo || item.costo_unitario || 0);
+                            const utilidadPorcentaje = Number(item.utilidad || item.utilidad_contable || item.porcentaje_ganancia || 0);
+                            let utilidadEnDinero = 0;
+                            if (utilidadPorcentaje > 0 && utilidadPorcentaje <= 100) {
+                              utilidadEnDinero = (costo * utilidadPorcentaje) / 100;
+                            } else if (utilidadPorcentaje > 100) {
+                              utilidadEnDinero = utilidadPorcentaje;
+                            }
+                            const precioCalculado = costo + utilidadEnDinero;
+                            if (precioCalculado > 0 && (!preciosMap.has(codigo) || preciosMap.get(codigo)! < precioCalculado)) {
+                              preciosMap.set(codigo, precioCalculado);
+                            }
+                          }
+                        }
+                      });
+                    });
+                    
+                    // Aplicar precios a productos que no tienen precio
+                    productosArray = productosArray.map((producto: any) => {
+                      const codigo = (producto.codigo || producto.codigo_producto || "").toUpperCase();
+                      const precioActual = Number(producto.precio || producto.precio_usd || producto.precio_unitario || producto.precio_venta || 0);
+                      
+                      if (precioActual === 0 && codigo && preciosMap.has(codigo)) {
+                        const precioDesdeCompra = preciosMap.get(codigo)!;
+                        return {
+                          ...producto,
+                          precio: precioDesdeCompra,
+                          precio_usd: precioDesdeCompra,
+                          precio_unitario: precioDesdeCompra,
+                          precio_venta: precioDesdeCompra
+                        };
+                      }
+                      return producto;
+                    });
+                  }
+                }
+              } catch (err) {
+                console.warn("⚠️ [PUNTO_VENTA] No se pudieron cargar precios desde compras:", err);
+              }
+            }
+            
             console.log(`✅ [PUNTO_VENTA] Productos encontrados: ${productosArray.length}`);
             if (productosArray.length > 0) {
               console.log(`📦 [PUNTO_VENTA] Primer producto:`, productosArray[0]);
               console.log(`📦 [PUNTO_VENTA] Campos del primer producto:`, Object.keys(productosArray[0]));
+              console.log(`💰 [PUNTO_VENTA] Precio del primer producto:`, productosArray[0].precio || productosArray[0].precio_usd || productosArray[0].precio_unitario);
             } else {
               console.warn(`⚠️ [PUNTO_VENTA] No se encontraron productos para la búsqueda: "${busqueda}"`);
             }
@@ -502,21 +570,90 @@ const PuntoVentaPage: React.FC = () => {
       const resultados = await Promise.all(promesasItems);
       const productosPlanaos = resultados.flat();
       
+      // Obtener precios desde compras para productos que no tienen precio
+      let preciosDesdeCompras: Map<string, number> = new Map();
+      try {
+        const resCompras = await fetch(`${API_BASE_URL}/compras`, {
+          headers: { "Authorization": `Bearer ${token}` },
+          signal: abortController.signal
+        });
+        
+        if (resCompras.ok && !abortController.signal.aborted) {
+          const comprasData = await resCompras.json();
+          const comprasArray = Array.isArray(comprasData) ? comprasData : [];
+          
+          // Extraer precios de venta de las compras
+          comprasArray.forEach((compra: any) => {
+            const items = compra.items || compra.productos || [];
+            items.forEach((item: any) => {
+              const codigo = (item.codigo || item.codigo_producto || "").toUpperCase();
+              if (codigo) {
+                // Obtener precio de venta de la compra
+                const precioVenta = Number(item.precio_venta || item.precioVenta || item.precio_unitario || item.precio || 0);
+                // Si no hay precio directo, calcular desde costo + utilidad
+                if (precioVenta === 0) {
+                  const costo = Number(item.precioUnitario || item.precio_unitario || item.costo || item.costo_unitario || 0);
+                  const utilidadPorcentaje = Number(item.utilidad || item.utilidad_contable || item.porcentaje_ganancia || 0);
+                  let utilidadEnDinero = 0;
+                  if (utilidadPorcentaje > 0 && utilidadPorcentaje <= 100) {
+                    utilidadEnDinero = (costo * utilidadPorcentaje) / 100;
+                  } else if (utilidadPorcentaje > 100) {
+                    utilidadEnDinero = utilidadPorcentaje;
+                  }
+                  const precioCalculado = costo + utilidadEnDinero;
+                  if (precioCalculado > 0 && (!preciosDesdeCompras.has(codigo) || preciosDesdeCompras.get(codigo)! < precioCalculado)) {
+                    preciosDesdeCompras.set(codigo, precioCalculado);
+                  }
+                } else if (precioVenta > 0 && (!preciosDesdeCompras.has(codigo) || preciosDesdeCompras.get(codigo)! < precioVenta)) {
+                  preciosDesdeCompras.set(codigo, precioVenta);
+                }
+              }
+            });
+          });
+        }
+      } catch (err) {
+        console.warn("⚠️ [PUNTO_VENTA] No se pudieron cargar precios desde compras:", err);
+      }
+
       // Normalizar productos
-      const productosNormalizados = productosPlanaos.map((item: any) => ({
-        id: item._id || item.id || `${item.codigo}_${Math.random()}`,
-        nombre: item.descripcion || item.nombre || item.descripcion_producto || "",
-        codigo: item.codigo || item.codigo_producto || "",
-        descripcion: item.descripcion || item.nombre || item.descripcion_producto || "",
-        marca: item.marca || item.marca_producto || "",
-        precio: item.precio_unitario || item.precio || item.precio_venta || 0,
-        precio_usd: item.precio_unitario || item.precio || item.precio_venta || 0,
-        precio_unitario: item.precio_unitario || item.precio || item.precio_venta || 0,
-        cantidad: item.cantidad || item.existencia || item.stock || 0,
-        stock: item.cantidad || item.existencia || item.stock || 0,
-        lotes: item.lotes || [],
-        sucursal: sucursalSeleccionada?.id || ""
-      }));
+      const productosNormalizados = productosPlanaos.map((item: any) => {
+        const codigo = (item.codigo || item.codigo_producto || "").toUpperCase();
+        const costo = Number(item.costo_unitario || item.costo || 0);
+        const precioInventario = Number(item.precio_unitario || item.precio || item.precio_venta || 0);
+        
+        // Obtener precio desde compras si no hay precio en inventario
+        let precioFinal = precioInventario;
+        if (precioFinal === 0 && codigo && preciosDesdeCompras.has(codigo)) {
+          precioFinal = preciosDesdeCompras.get(codigo)!;
+        }
+        
+        // Si aún no hay precio, intentar calcular desde costo y utilidad
+        if (precioFinal === 0 && costo > 0) {
+          const utilidadPorcentaje = Number(item.utilidad || item.utilidad_contable || item.porcentaje_ganancia || 0);
+          if (utilidadPorcentaje > 0) {
+            if (utilidadPorcentaje <= 100) {
+              precioFinal = costo * (1 + utilidadPorcentaje / 100);
+            } else {
+              precioFinal = costo + utilidadPorcentaje;
+            }
+          }
+        }
+        
+        return {
+          id: item._id || item.id || `${item.codigo}_${Math.random()}`,
+          nombre: item.descripcion || item.nombre || item.descripcion_producto || "",
+          codigo: item.codigo || item.codigo_producto || "",
+          descripcion: item.descripcion || item.nombre || item.descripcion_producto || "",
+          marca: item.marca || item.marca_producto || "",
+          precio: precioFinal,
+          precio_usd: precioFinal,
+          precio_unitario: precioFinal,
+          cantidad: item.cantidad || item.existencia || item.stock || 0,
+          stock: item.cantidad || item.existencia || item.stock || 0,
+          lotes: item.lotes || [],
+          sucursal: sucursalSeleccionada?.id || ""
+        };
+      });
 
       console.log(`✅ [PUNTO_VENTA] Productos cargados desde inventarios: ${productosNormalizados.length}`);
       if (!abortController.signal.aborted) {
