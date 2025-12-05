@@ -626,7 +626,9 @@ const VisualizarInventariosPage: React.FC = () => {
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-800">Inventarios Registrados</h1>
+          <h1 className="text-3xl font-bold text-slate-800">
+            {vistaTabla ? "📊 Tabla de Productos" : "📦 Inventarios Registrados"}
+          </h1>
           <div className="flex gap-2">
             <Button
               onClick={() => {
@@ -638,10 +640,24 @@ const VisualizarInventariosPage: React.FC = () => {
                   cargarTodosLosProductos();
                 }
               }}
-              variant={vistaTabla ? "default" : "outline"}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+              variant={vistaTabla ? "outline" : "default"}
+              className={`flex items-center gap-2 ${
+                vistaTabla 
+                  ? "border-2 border-blue-600 text-blue-600 hover:bg-blue-50" 
+                  : "bg-blue-600 hover:bg-blue-700 text-white"
+              } font-semibold px-6 py-2 shadow-md`}
             >
-              {vistaTabla ? "← Vista Inventarios" : "Vista Productos →"}
+              {vistaTabla ? (
+                <>
+                  <Eye className="w-4 h-4" />
+                  Vista Inventarios
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4" />
+                  Vista Productos
+                </>
+              )}
             </Button>
             {inventariosFiltrados.length > 0 && !vistaTabla && (
             <Button
