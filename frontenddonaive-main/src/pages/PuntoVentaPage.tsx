@@ -383,10 +383,15 @@ const PuntoVentaPage: React.FC = () => {
             }
             
             setProductosEncontrados(productosArray);
+          } else if (res.status === 404 && !abortController.signal.aborted) {
+            // Si el endpoint no existe, intentar cargar desde inventarios
+            console.warn(`⚠️ [PUNTO_VENTA] Endpoint de búsqueda no encontrado, intentando cargar desde inventarios...`);
+            await cargarProductosDesdeInventarios(busqueda, abortController);
           } else if (!abortController.signal.aborted) {
             const errorText = await res.text().catch(() => '');
             console.warn(`⚠️ [PUNTO_VENTA] Error en búsqueda, status: ${res.status}, error: ${errorText}`);
-            setProductosEncontrados([]);
+            // Intentar cargar desde inventarios como fallback
+            await cargarProductosDesdeInventarios(busqueda, abortController);
           }
         } catch (error: any) {
           // Ignorar errores de cancelación
