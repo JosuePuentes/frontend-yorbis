@@ -5,7 +5,6 @@ import VerItemsInventarioModal from "../components/VerItemsInventarioModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Download, Trash2, Edit, Eye, Search } from "lucide-react";
-import { fetchWithAuth } from "@/lib/api";
 
 interface Inventario {
   _id: string;
