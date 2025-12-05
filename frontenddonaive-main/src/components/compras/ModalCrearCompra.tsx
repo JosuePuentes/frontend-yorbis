@@ -319,10 +319,45 @@ const ModalCrearCompra: React.FC<ModalCrearCompraProps> = ({
   };
 
   // Agregar nuevo producto
-  const agregarNuevoProducto = () => {
+  const agregarNuevoProducto = async () => {
     if (!codigoNuevo.trim() || !descripcionNuevo.trim() || !costoNuevo || !utilidadNuevo || !cantidadNuevo) {
       setError("Código, descripción, costo, utilidad y cantidad son obligatorios");
       return;
+    }
+
+    const codigoNormalizado = codigoNuevo.trim().toUpperCase();
+
+    // Verificar si el código ya está en la compra actual
+    const codigoYaEnCompra = itemsCompra.find(item => 
+      item.codigo.toUpperCase() === codigoNormalizado
+    );
+    if (codigoYaEnCompra) {
+      setError(`El código ${codigoNormalizado} ya está en esta compra. No se pueden agregar códigos duplicados.`);
+      return;
+    }
+
+    // Verificar si el código existe en el inventario (llamar al backend)
+    try {
+      const token = localStorage.getItem("access_token");
+      if (token) {
+        // Buscar productos con este código en el inventario
+        const res = await fetch(`${API_BASE_URL}/productos/buscar-codigo?codigo=${encodeURIComponent(codigoNormalizado)}&sucursal=${sucursalId}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const productoExistente = Array.isArray(data) ? data[0] : (data.producto || data);
+          
+          if (productoExistente && productoExistente.codigo) {
+            setError(`El código ${codigoNormalizado} ya existe en el inventario. Por favor, busca el producto existente en lugar de crear uno nuevo.`);
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      // Si el endpoint no existe, continuar (el backend validará)
+      console.warn("⚠️ [COMPRAS] No se pudo verificar código duplicado en backend:", err);
     }
 
     const costo = parseFloat(costoNuevo);
@@ -336,7 +371,7 @@ const ModalCrearCompra: React.FC<ModalCrearCompraProps> = ({
 
     const nuevoItem: ItemCompra = {
       id: `item-${Date.now()}-${Math.random()}`,
-      codigo: codigoNuevo.trim(),
+      codigo: codigoNormalizado,
       descripcion: descripcionNuevo.trim(),
       marca: marcaNuevo.trim(),
       costo: costo,
