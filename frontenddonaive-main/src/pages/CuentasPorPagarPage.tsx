@@ -25,7 +25,8 @@ interface Sucursal {
 
 interface Compra {
   _id: string;
-  proveedor_id: string;
+  proveedor_id?: string;
+  proveedorId?: string; // Alternativa del backend
   proveedor?: Proveedor;
   sucursal_id?: string;
   sucursal?: Sucursal;
@@ -47,6 +48,8 @@ interface Compra {
   dias_restantes?: number;
   en_mora?: boolean;
   fecha_vencimiento?: Date | null;
+  proveedor_nombre?: string; // Para fallback
+  proveedorNombre?: string; // Alternativa del backend
 }
 
 type FiltroEstado = "todos" | "sin_pago" | "abonado" | "pagada" | "en_mora";
@@ -354,7 +357,7 @@ const CuentasPorPagarPage: React.FC = () => {
   useEffect(() => {
     // Cargar proveedores primero, luego compras y sucursales
     const cargarDatos = async () => {
-      const proveedoresCargados = await fetchProveedores();
+      await fetchProveedores();
       // Esperar un momento para asegurar que los proveedores estén en el estado
       await new Promise(resolve => setTimeout(resolve, 100));
       await fetchCompras();

@@ -337,8 +337,35 @@ const PuntoVentaPage: React.FC = () => {
           
           if (res.ok && !abortController.signal.aborted) {
             const data = await res.json();
-            setProductosEncontrados(Array.isArray(data) ? data : []);
+            console.log(`🔍 [PUNTO_VENTA] Respuesta de búsqueda:`, data);
+            console.log(`🔍 [PUNTO_VENTA] Tipo de dato:`, typeof data);
+            console.log(`🔍 [PUNTO_VENTA] Es array?:`, Array.isArray(data));
+            
+            // Normalizar la respuesta - puede venir como array directo o dentro de un objeto
+            let productosArray: any[] = [];
+            if (Array.isArray(data)) {
+              productosArray = data;
+            } else if (data && Array.isArray(data.productos)) {
+              productosArray = data.productos;
+            } else if (data && Array.isArray(data.items)) {
+              productosArray = data.items;
+            } else if (data && typeof data === 'object') {
+              // Si es un objeto, intentar extraer arrays
+              const valores = Object.values(data);
+              const arrays = valores.filter(Array.isArray);
+              if (arrays.length > 0) {
+                productosArray = arrays.flat() as any[];
+              }
+            }
+            
+            console.log(`✅ [PUNTO_VENTA] Productos encontrados: ${productosArray.length}`);
+            if (productosArray.length > 0) {
+              console.log(`📦 [PUNTO_VENTA] Primer producto:`, productosArray[0]);
+            }
+            
+            setProductosEncontrados(productosArray);
           } else if (!abortController.signal.aborted) {
+            console.warn(`⚠️ [PUNTO_VENTA] Error en búsqueda, status: ${res.status}`);
             setProductosEncontrados([]);
           }
         } catch (error: any) {
