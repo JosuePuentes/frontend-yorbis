@@ -52,7 +52,8 @@ interface Compra {
   total_costo: number;
   total_precio_venta: number;
   total?: number; // Total de la compra (puede venir del backend)
-  items: any[];
+  items?: any[]; // Items de la compra
+  productos?: any[]; // Productos de la compra (alternativa a items)
   estado?: "sin_pago" | "abonado" | "pagada";
   monto_abonado?: number;
   monto_restante?: number;
