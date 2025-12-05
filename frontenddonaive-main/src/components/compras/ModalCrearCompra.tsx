@@ -221,8 +221,6 @@ const ModalCrearCompra: React.FC<ModalCrearCompraProps> = ({
               console.warn(`⚠️ [COMPRAS] Endpoint alternativo falló para inventario ${inventario._id}:`, err);
             }
           }
-          
-          if (resItems.ok) {
 
             // Agregar a la lista (evitar duplicados por código)
             itemsFiltrados.forEach((item: any) => {
