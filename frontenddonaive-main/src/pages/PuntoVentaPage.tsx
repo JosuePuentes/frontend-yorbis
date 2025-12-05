@@ -422,6 +422,114 @@ const PuntoVentaPage: React.FC = () => {
     }
   }, [busquedaItem, sucursalSeleccionada]);
 
+  // Función para cargar productos desde inventarios como fallback
+  const cargarProductosDesdeInventarios = async (busqueda: string, abortController: AbortController) => {
+    try {
+      const token = localStorage.getItem("access_token");
+      if (!token) return;
+
+      // Obtener todos los inventarios de la sucursal
+      const resInventarios = await fetch(`${API_BASE_URL}/inventarios`, {
+        headers: { "Authorization": `Bearer ${token}` },
+        signal: abortController.signal
+      });
+
+      if (!resInventarios.ok || abortController.signal.aborted) return;
+
+      const inventariosData = await resInventarios.json();
+      const inventariosArray = Array.isArray(inventariosData) ? inventariosData : [];
+      
+      // Filtrar inventarios de la sucursal actual
+      const inventariosSucursal = inventariosArray.filter((inv: any) => 
+        inv.farmacia === sucursalSeleccionada?.id || inv.sucursal_id === sucursalSeleccionada?.id
+      );
+
+      console.log(`🔍 [PUNTO_VENTA] Inventarios encontrados para sucursal: ${inventariosSucursal.length}`);
+
+      // Cargar items de todos los inventarios en paralelo
+      const promesasItems = inventariosSucursal.map(async (inventario: any) => {
+        try {
+          const resItems = await fetch(`${API_BASE_URL}/inventarios/${inventario._id}/items`, {
+            headers: { "Authorization": `Bearer ${token}` },
+            signal: abortController.signal
+          });
+
+          if (resItems.ok && !abortController.signal.aborted) {
+            const items = await resItems.json();
+            const itemsArray = Array.isArray(items) ? items : [];
+            
+            // Filtrar items que coincidan con la búsqueda
+            const busquedaLower = busqueda.toLowerCase();
+            return itemsArray.filter((item: any) => {
+              const codigo = (item.codigo || item.codigo_producto || "").toLowerCase();
+              const descripcion = (item.descripcion || item.nombre || item.descripcion_producto || "").toLowerCase();
+              const marca = (item.marca || item.marca_producto || "").toLowerCase();
+              return codigo.includes(busquedaLower) || descripcion.includes(busquedaLower) || marca.includes(busquedaLower);
+            });
+          } else if (resItems.status === 404) {
+            // Intentar endpoint alternativo
+            try {
+              const resAlt = await fetch(`${API_BASE_URL}/productos?inventario_id=${inventario._id}`, {
+                headers: { "Authorization": `Bearer ${token}` },
+                signal: abortController.signal
+              });
+              if (resAlt.ok && !abortController.signal.aborted) {
+                const data = await resAlt.json();
+                const productos = Array.isArray(data) ? data : (data.productos || data.items || []);
+                const busquedaLower = busqueda.toLowerCase();
+                return productos.filter((item: any) => {
+                  const codigo = (item.codigo || item.codigo_producto || "").toLowerCase();
+                  const descripcion = (item.descripcion || item.nombre || item.descripcion_producto || "").toLowerCase();
+                  const marca = (item.marca || item.marca_producto || "").toLowerCase();
+                  return codigo.includes(busquedaLower) || descripcion.includes(busquedaLower) || marca.includes(busquedaLower);
+                });
+              }
+            } catch (err) {
+              if (err instanceof Error && err.name !== 'AbortError') {
+                console.warn(`⚠️ [PUNTO_VENTA] Error al obtener productos alternativos:`, err);
+              }
+            }
+          }
+          return [];
+        } catch (err) {
+          if (err instanceof Error && err.name !== 'AbortError') {
+            console.error(`Error al obtener items del inventario ${inventario._id}:`, err);
+          }
+          return [];
+        }
+      });
+
+      const resultados = await Promise.all(promesasItems);
+      const productosPlanaos = resultados.flat();
+      
+      // Normalizar productos
+      const productosNormalizados = productosPlanaos.map((item: any) => ({
+        id: item._id || item.id || `${item.codigo}_${Math.random()}`,
+        nombre: item.descripcion || item.nombre || item.descripcion_producto || "",
+        codigo: item.codigo || item.codigo_producto || "",
+        descripcion: item.descripcion || item.nombre || item.descripcion_producto || "",
+        marca: item.marca || item.marca_producto || "",
+        precio: item.precio_unitario || item.precio || item.precio_venta || 0,
+        precio_usd: item.precio_unitario || item.precio || item.precio_venta || 0,
+        precio_unitario: item.precio_unitario || item.precio || item.precio_venta || 0,
+        cantidad: item.cantidad || item.existencia || item.stock || 0,
+        stock: item.cantidad || item.existencia || item.stock || 0,
+        lotes: item.lotes || [],
+        sucursal: sucursalSeleccionada?.id || ""
+      }));
+
+      console.log(`✅ [PUNTO_VENTA] Productos cargados desde inventarios: ${productosNormalizados.length}`);
+      if (!abortController.signal.aborted) {
+        setProductosEncontrados(productosNormalizados);
+      }
+    } catch (error: any) {
+      if (error.name !== 'AbortError' && !abortController.signal.aborted) {
+        console.error("Error al cargar productos desde inventarios:", error);
+        setProductosEncontrados([]);
+      }
+    }
+  };
+
   // Cerrar dropdown de stock al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
