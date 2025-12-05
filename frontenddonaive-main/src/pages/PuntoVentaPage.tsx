@@ -1215,12 +1215,30 @@ const PuntoVentaPage: React.FC = () => {
             
             if (inventarioSucursal) {
               // Obtener items del inventario
+              const inventarioId = inventarioSucursal._id || inventarioSucursal.id;
               const resItems = await fetchWithAuth(
-                `${API_BASE_URL}/inventarios/${inventarioSucursal._id || inventarioSucursal.id}/items`
+                `${API_BASE_URL}/inventarios/${inventarioId}/items`
               );
+              
               if (resItems.ok) {
                 itemsInventario = await resItems.json();
                 if (!Array.isArray(itemsInventario)) {
+                  itemsInventario = [];
+                }
+              } else if (resItems.status === 404) {
+                // Si el endpoint no existe, intentar endpoint alternativo
+                console.warn(`⚠️ [PuntoVenta] Endpoint /inventarios/${inventarioId}/items no encontrado, intentando alternativas...`);
+                try {
+                  const resAlt = await fetchWithAuth(
+                    `${API_BASE_URL}/productos?inventario_id=${inventarioId}`
+                  );
+                  if (resAlt.ok) {
+                    const data = await resAlt.json();
+                    itemsInventario = Array.isArray(data) ? data : (data.productos || data.items || []);
+                    console.log(`✅ [PuntoVenta] Items obtenidos desde endpoint alternativo: ${itemsInventario.length} items`);
+                  }
+                } catch (err) {
+                  console.warn("⚠️ [PuntoVenta] Endpoint alternativo falló:", err);
                   itemsInventario = [];
                 }
               }

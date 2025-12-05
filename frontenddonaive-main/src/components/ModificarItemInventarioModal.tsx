@@ -111,6 +111,110 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
       );
 
       if (!res.ok) {
+        // Si el endpoint no existe (404), intentar endpoints alternativos
+        if (res.status === 404) {
+          console.warn(`⚠️ [ModificarItemInventarioModal] Endpoint /inventarios/${inventarioId}/items no encontrado, intentando alternativas...`);
+          
+          // Intentar con endpoint alternativo 1: productos filtrados por inventario
+          try {
+            const resAlt1 = await fetch(
+              `${API_BASE_URL}/productos?inventario_id=${inventarioId}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              }
+            );
+
+            if (resAlt1.ok) {
+              const items = await resAlt1.json();
+              const itemsArray = Array.isArray(items) ? items : (items.productos || items.items || []);
+              
+              // Mapear items del inventario a productos para el modal
+              const todosProductos: Producto[] = itemsArray.map((item: any) => {
+                const productoId = item._id || item.id || item.item_id || "";
+                const codigoProducto = item.codigo || "";
+                const descripcionProducto = item.descripcion || item.nombre || "";
+                const marcaProducto = item.marca || "";
+                const costoUnitario = Number(item.costo_unitario || item.costo || 0);
+                const cantidad = Number(item.cantidad || item.stock || 0);
+                const precioUnitario = Number(item.precio_unitario || item.precio_venta || 0);
+                
+                return {
+                  _id: productoId,
+                  codigo: codigoProducto,
+                  descripcion: descripcionProducto,
+                  marca: marcaProducto,
+                  costo_unitario: costoUnitario,
+                  cantidad: cantidad,
+                  precio_unitario: precioUnitario,
+                };
+              });
+              
+              setProductosTodos(todosProductos);
+              setProductos(todosProductos);
+              console.log(`✅ [ModificarItemInventarioModal] Productos obtenidos desde endpoint alternativo: ${todosProductos.length} productos`);
+              return;
+            }
+          } catch (err) {
+            console.warn("⚠️ [ModificarItemInventarioModal] Endpoint alternativo 1 falló:", err);
+          }
+          
+          // Intentar con endpoint alternativo 2: obtener todos los productos y filtrar
+          try {
+            const resAlt2 = await fetch(`${API_BASE_URL}/productos`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            });
+
+            if (resAlt2.ok) {
+              const data = await resAlt2.json();
+              const productos = Array.isArray(data) ? data : (data.productos || []);
+              // Filtrar productos que pertenezcan a este inventario
+              const itemsFiltrados = productos.filter((p: any) => 
+                p.inventario_id === inventarioId || 
+                p.inventario === inventarioId ||
+                p.inventarioId === inventarioId
+              );
+              
+              // Mapear items del inventario a productos para el modal
+              const todosProductos: Producto[] = itemsFiltrados.map((item: any) => {
+                const productoId = item._id || item.id || item.item_id || "";
+                const codigoProducto = item.codigo || "";
+                const descripcionProducto = item.descripcion || item.nombre || "";
+                const marcaProducto = item.marca || "";
+                const costoUnitario = Number(item.costo_unitario || item.costo || 0);
+                const cantidad = Number(item.cantidad || item.stock || 0);
+                const precioUnitario = Number(item.precio_unitario || item.precio_venta || 0);
+                
+                return {
+                  _id: productoId,
+                  codigo: codigoProducto,
+                  descripcion: descripcionProducto,
+                  marca: marcaProducto,
+                  costo_unitario: costoUnitario,
+                  cantidad: cantidad,
+                  precio_unitario: precioUnitario,
+                };
+              });
+              
+              setProductosTodos(todosProductos);
+              setProductos(todosProductos);
+              console.log(`✅ [ModificarItemInventarioModal] Productos obtenidos desde endpoint alternativo 2: ${todosProductos.length} productos`);
+              return;
+            }
+          } catch (err) {
+            console.warn("⚠️ [ModificarItemInventarioModal] Endpoint alternativo 2 falló:", err);
+          }
+          
+          // Si ningún endpoint alternativo funciona, mostrar error
+          setError("El endpoint para obtener items del inventario no está disponible. Por favor, contacte al administrador.");
+          setProductosTodos([]);
+          setProductos([]);
+          return;
+        }
+        
         throw new Error("Error al obtener items del inventario");
       }
 

@@ -96,6 +96,12 @@ const CuentasPorPagarPage: React.FC = () => {
           // El backend puede enviar fecha_compra o fecha
           const fechaCompra = compra.fecha_compra || compra.fecha || compra.fecha_creacion;
           
+          // Normalizar items/productos - el backend puede enviar "productos" o "items"
+          const items = compra.items || compra.productos || [];
+          
+          // Normalizar sucursal_id - el backend puede enviar "farmacia" o "sucursal_id"
+          const sucursalId = compra.sucursal_id || compra.farmacia || "";
+          
           // Validar y normalizar valores
           const totalPrecioVenta = Number(compra.total_precio_venta || compra.total || compra.total_con_iva || 0);
           
@@ -234,6 +240,9 @@ const CuentasPorPagarPage: React.FC = () => {
             fecha_compra: compra.fecha_compra,
             fecha_creacion: compra.fecha_creacion,
             proveedor: proveedorNormalizado,
+            proveedor_id: compra.proveedor_id || compra.proveedorId || "",
+            sucursal_id: sucursalId,
+            items: items, // Normalizar items/productos
             estado,
             monto_abonado: montoAbonado,
             monto_restante: isNaN(montoRestante) ? totalPrecioVenta : montoRestante,
@@ -408,19 +417,30 @@ const CuentasPorPagarPage: React.FC = () => {
       const res = await fetchWithAuth(`${API_BASE_URL}/farmacias`);
       if (res.ok) {
         const data = await res.json();
-        const listaSucursales = data.farmacias
-          ? Object.entries(data.farmacias).map(([id, nombre]) => ({
-              id,
-              nombre: String(nombre),
-            }))
-          : Object.entries(data).map(([id, nombre]) => ({
-              id,
-              nombre: String(nombre),
-            }));
+        let listaSucursales: Sucursal[] = [];
+        
+        if (data.farmacias && typeof data.farmacias === 'object') {
+          listaSucursales = Object.entries(data.farmacias).map(([id, nombre]) => ({
+            id,
+            nombre: String(nombre),
+          }));
+        } else if (data && typeof data === 'object' && !Array.isArray(data)) {
+          listaSucursales = Object.entries(data).map(([id, nombre]) => ({
+            id,
+            nombre: String(nombre),
+          }));
+        } else if (Array.isArray(data)) {
+          listaSucursales = data.map((item: any) => ({
+            id: item.id || item._id || "",
+            nombre: item.nombre || String(item),
+          }));
+        }
+        
         setSucursales(listaSucursales);
       }
     } catch (err) {
       console.error("Error al cargar sucursales:", err);
+      setSucursales([]);
     }
   };
 
@@ -624,7 +644,7 @@ const CuentasPorPagarPage: React.FC = () => {
               className="w-full md:w-auto border rounded px-3 py-2"
             >
               <option value="todas">Todas las Sucursales</option>
-              {sucursales.map((sucursal) => (
+              {(sucursales && Array.isArray(sucursales) ? sucursales : []).map((sucursal) => (
                 <option key={sucursal.id} value={sucursal.id}>
                   {sucursal.nombre}
                 </option>

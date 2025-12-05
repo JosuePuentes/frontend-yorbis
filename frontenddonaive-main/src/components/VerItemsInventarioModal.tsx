@@ -68,20 +68,58 @@ const VerItemsInventarioModal: React.FC<VerItemsInventarioModalProps> = ({
       });
 
       if (!res.ok) {
-        // Si el endpoint no existe, intentar obtener productos filtrados por inventario
+        // Si el endpoint no existe (404), intentar endpoints alternativos
         if (res.status === 404) {
-          // Intentar con endpoint alternativo
-          const resAlt = await fetch(`${API_BASE_URL}/productos?inventario_id=${inventarioId}`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
+          console.warn(`⚠️ [VerItemsInventarioModal] Endpoint /inventarios/${inventarioId}/items no encontrado, intentando alternativas...`);
+          
+          // Intentar con endpoint alternativo 1: productos filtrados por inventario
+          try {
+            const resAlt1 = await fetch(`${API_BASE_URL}/productos?inventario_id=${inventarioId}`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            });
 
-          if (resAlt.ok) {
-            const data = await resAlt.json();
-            setItems(Array.isArray(data) ? data : []);
-            return;
+            if (resAlt1.ok) {
+              const data = await resAlt1.json();
+              const itemsArray = Array.isArray(data) ? data : (data.productos || data.items || []);
+              setItems(itemsArray);
+              console.log(`✅ [VerItemsInventarioModal] Items obtenidos desde endpoint alternativo: ${itemsArray.length} items`);
+              return;
+            }
+          } catch (err) {
+            console.warn("⚠️ [VerItemsInventarioModal] Endpoint alternativo 1 falló:", err);
           }
+          
+          // Intentar con endpoint alternativo 2: obtener todos los productos y filtrar
+          try {
+            const resAlt2 = await fetch(`${API_BASE_URL}/productos`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            });
+
+            if (resAlt2.ok) {
+              const data = await resAlt2.json();
+              const productos = Array.isArray(data) ? data : (data.productos || []);
+              // Filtrar productos que pertenezcan a este inventario
+              const itemsFiltrados = productos.filter((p: any) => 
+                p.inventario_id === inventarioId || 
+                p.inventario === inventarioId ||
+                p.inventarioId === inventarioId
+              );
+              setItems(itemsFiltrados);
+              console.log(`✅ [VerItemsInventarioModal] Items obtenidos desde endpoint alternativo 2: ${itemsFiltrados.length} items`);
+              return;
+            }
+          } catch (err) {
+            console.warn("⚠️ [VerItemsInventarioModal] Endpoint alternativo 2 falló:", err);
+          }
+          
+          // Si ningún endpoint alternativo funciona, mostrar mensaje amigable
+          setItems([]);
+          setError("El endpoint para obtener items del inventario no está disponible. Por favor, contacte al administrador.");
+          return;
         }
         
         const errorData = await res.json().catch(() => null);

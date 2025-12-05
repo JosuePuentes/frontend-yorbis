@@ -86,16 +86,26 @@ const ModalDetalleCuentaPorPagar: React.FC<ModalDetalleCuentaPorPagarProps> = ({
   compra,
   onPagoCompletado,
 }) => {
+  // Normalizar compra para asegurar que items y pagos sean arrays
+  const compraNormalizada = React.useMemo(() => {
+    return {
+      ...compra,
+      items: compra.items && Array.isArray(compra.items) ? compra.items : (compra.productos && Array.isArray(compra.productos) ? compra.productos : []),
+      pagos: compra.pagos && Array.isArray(compra.pagos) ? compra.pagos : [],
+    };
+  }, [compra]);
+
   // Log para diagnosticar
   useEffect(() => {
     if (open) {
-      console.log("🔍 [MODAL] Compra recibida:", compra);
-      console.log("🔍 [MODAL] Proveedor:", compra.proveedor);
-      console.log("🔍 [MODAL] Fecha:", compra.fecha);
-      console.log("🔍 [MODAL] Proveedor ID:", compra.proveedor_id);
-      console.log("🔍 [MODAL] Pagos:", compra.pagos);
-      if (compra.pagos && compra.pagos.length > 0) {
-        compra.pagos.forEach((pago: Pago, idx: number) => {
+      console.log("🔍 [MODAL] Compra recibida:", compraNormalizada);
+      console.log("🔍 [MODAL] Proveedor:", compraNormalizada.proveedor);
+      console.log("🔍 [MODAL] Fecha:", compraNormalizada.fecha);
+      console.log("🔍 [MODAL] Proveedor ID:", compraNormalizada.proveedor_id);
+      console.log("🔍 [MODAL] Items:", compraNormalizada.items);
+      console.log("🔍 [MODAL] Pagos:", compraNormalizada.pagos);
+      if (compraNormalizada.pagos && compraNormalizada.pagos.length > 0) {
+        compraNormalizada.pagos.forEach((pago: Pago, idx: number) => {
           console.log(`  💵 [PAGO ${idx + 1}]`, {
             _id: pago._id,
             monto: pago.monto,
@@ -634,11 +644,11 @@ const ModalDetalleCuentaPorPagar: React.FC<ModalDetalleCuentaPorPagarProps> = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {compra.items.map((item: any, idx: number) => (
+                  {(compraNormalizada.items && Array.isArray(compraNormalizada.items) ? compraNormalizada.items : []).map((item: any, idx: number) => (
                     <tr key={idx} className="border-b">
-                      <td className="p-2">{item.codigo}</td>
-                      <td className="p-2">{item.descripcion}</td>
-                      <td className="p-2 text-right">{item.cantidad}</td>
+                      <td className="p-2">{item.codigo || item.codigo_producto || "-"}</td>
+                      <td className="p-2">{item.descripcion || item.nombre || "-"}</td>
+                      <td className="p-2 text-right">{item.cantidad || 0}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -647,7 +657,7 @@ const ModalDetalleCuentaPorPagar: React.FC<ModalDetalleCuentaPorPagarProps> = ({
           </Card>
 
           {/* Historial de Pagos */}
-          {compra.pagos && compra.pagos.length > 0 && (
+          {compraNormalizada.pagos && Array.isArray(compraNormalizada.pagos) && compraNormalizada.pagos.length > 0 && (
             <Card className="p-4 mb-4">
               <h3 className="font-semibold mb-3">Historial de Pagos</h3>
               <div className="overflow-x-auto">
@@ -663,7 +673,7 @@ const ModalDetalleCuentaPorPagar: React.FC<ModalDetalleCuentaPorPagarProps> = ({
                     </tr>
                   </thead>
                   <tbody>
-                    {compra.pagos.map((pago: Pago, idx: number) => {
+                    {compraNormalizada.pagos.map((pago: Pago, idx: number) => {
                       const montoPago = Number(pago.monto || pago.monto_usd || pago.monto_bs || 0);
                       const fechaPago = pago.fecha_pago || pago.fecha_creacion || "";
                       const comprobante = pago.comprobante || "";
