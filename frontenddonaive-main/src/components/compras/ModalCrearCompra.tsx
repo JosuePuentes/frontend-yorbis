@@ -447,56 +447,59 @@ const ModalCrearCompra: React.FC<ModalCrearCompraProps> = ({
     setError(null);
 
     try {
-      // Determinar divisa y tasa según si se paga en dólar negro
-      const divisa = pagarEnDolarNegro ? "USD" : "USD"; // Por defecto USD, ajustar si es necesario
-      const tasa = pagarEnDolarNegro ? dolarNegro : dolarBcv;
-      
       // Calcular total de la compra (subtotal + IVA)
       const totalCompra = subtotal + totalIva;
       
+      // Obtener fecha actual en formato YYYY-MM-DD
+      const fechaActual = new Date().toISOString().split('T')[0];
+      
+      // Preparar el body según el formato esperado por el backend
+      const bodyData = {
+        proveedorId: proveedor._id || "",
+        proveedorNombre: proveedor.nombre || "",
+        fecha: fechaActual,
+        farmacia: sucursalId,
+        total: totalCompra,
+        numeroFactura: "", // Opcional, se puede agregar un campo en el formulario si es necesario
+        observaciones: "", // Opcional, se puede agregar un campo en el formulario si es necesario
+        productos: itemsCompra.map(item => ({
+          nombre: item.descripcion, // Requerido
+          cantidad: item.cantidad, // Número
+          precioUnitario: item.costoAjustado, // Número (costo ajustado si aplica dólar negro)
+          precioTotal: item.costoAjustado * item.cantidad, // Número (precio unitario * cantidad)
+          codigo: item.codigo || undefined, // Opcional
+          productoId: item.productoId || undefined, // Opcional
+          // Campos adicionales para compatibilidad (el backend puede ignorarlos si no los necesita)
+          marca: item.marca || undefined,
+          lote: item.lote || undefined,
+          fechaVencimiento: item.fechaVencimiento || undefined,
+          lleva_iva: item.llevaIva || false,
+          iva: item.iva || 0,
+          utilidad: item.utilidad || 0,
+          precio_venta: item.precioVenta || 0,
+        })),
+      };
+      
+      console.log("📦 [COMPRAS] Enviando compra al backend:", JSON.stringify(bodyData, null, 2));
+      
       const res = await fetchWithAuth(`${API_BASE_URL}/compras`, {
         method: "POST",
-        body: JSON.stringify({
-          proveedor_id: proveedor._id,
-          sucursal_id: sucursalId, // Backend usa sucursal_id (normaliza sucursal si viene)
-          sucursal: sucursalId, // Enviar también para compatibilidad
-          farmacia: sucursalId, // Backend también puede esperar "farmacia"
-          divisa: divisa,
-          tasa: tasa,
-          pagar_en_dolar_negro: pagarEnDolarNegro,
-          dolar_bcv: dolarBcv,
-          dolar_negro: dolarNegro,
-          total: totalCompra, // Total de la compra (subtotal + IVA)
-          items: itemsCompra.map(item => ({
-            codigo: item.codigo,
-            nombre: item.descripcion, // Backend espera "nombre"
-            descripcion: item.descripcion, // Mantener por compatibilidad
-            marca: item.marca,
-            costo_unitario: item.costo, // Backend espera "costo_unitario"
-            costo: item.costo, // Mantener por compatibilidad
-            costo_ajustado: item.costoAjustado,
-            precio_unitario: item.precioVenta, // Backend espera "precio_unitario"
-            precio_venta: item.precioVenta, // Mantener por compatibilidad
-            lleva_iva: item.llevaIva,
-            iva: item.iva, // Backend calcula automáticamente pero acepta el valor
-            utilidad: item.utilidad,
-            cantidad: item.cantidad,
-            total: item.precioVenta * item.cantidad, // Backend espera "total" calculado
-            fecha_vencimiento: item.fechaVencimiento || null,
-            lote: item.lote || null,
-            es_nuevo: item.esNuevo,
-            producto_id: item.productoId || null,
-            lotes_existentes: item.lotesExistentes || [],
-          })),
-        }),
+        body: JSON.stringify(bodyData),
       });
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => null);
-        throw new Error(errorData?.detail || errorData?.message || "Error al guardar compra");
+        const errorMessage = errorData?.detail || errorData?.message || `Error al guardar compra (${res.status})`;
+        console.error("❌ [COMPRAS] Error del backend:", errorData);
+        throw new Error(errorMessage);
       }
 
       const compraData = await res.json();
+      console.log("✅ [COMPRAS] Compra guardada exitosamente:", compraData);
+      
+      // El backend actualiza el inventario automáticamente, no necesitamos hacer otra petición
+      console.log("✅ [COMPRAS] El inventario se actualizó automáticamente en el backend");
+      
       setCompraGuardada({
         ...compraData.compra || compraData,
         proveedor: proveedor,
@@ -513,7 +516,7 @@ const ModalCrearCompra: React.FC<ModalCrearCompraProps> = ({
       });
     } catch (err: any) {
       setError(err.message || "Error al guardar compra");
-      console.error("Error al guardar compra:", err);
+      console.error("❌ [COMPRAS] Error al guardar compra:", err);
     } finally {
       setLoading(false);
     }

@@ -42,6 +42,7 @@ import PuntoVentaPage from "@/pages/PuntoVentaPage";
 import GestionBancosPage from "@/pages/GestionBancosPage";
 import ComprasPage from "@/pages/ComprasPage";
 import CuentasPorPagarComprasPage from "@/pages/CuentasPorPagarPage";
+import DashboardPage from "@/pages/DashboardPage";
 
 const AppRouter = () => (
   <Routes>
@@ -52,6 +53,11 @@ const AppRouter = () => (
     <Route path="/admin" element={
       <PrivateRoute>
         <AdminPage />
+      </PrivateRoute>
+    } />
+    <Route path="/dashboard" element={
+      <PrivateRoute>
+        <DashboardPage />
       </PrivateRoute>
     } />
     <Route path="/about" element={<AboutPage />} />

@@ -49,7 +49,7 @@ const AgregarCuadrePage: React.FC = () => {
                 </div>
             )}
             <div className="mb-4 w-full max-w-md">
-                <label className="block text-sm">Farmacia</label>
+                <label className="block text-sm">Sucursal</label>
                 <select
                     value={farmacia}
                     onChange={e => {
@@ -60,7 +60,7 @@ const AgregarCuadrePage: React.FC = () => {
                     required
                     onBlur={() => setInputTouched(t => ({ ...t, farmacia: true }))}
                 >
-                    <option value="">Seleccione una farmacia</option>
+                    <option value="">Seleccione una sucursal</option>
                     {Object.entries(farmacias).map(([codigo, nombre]) => (
                         <option key={codigo} value={codigo}>
                             {String(nombre)} ({String(codigo)})
@@ -68,7 +68,7 @@ const AgregarCuadrePage: React.FC = () => {
                     ))}
                 </select>
                 {inputTouched.farmacia && !farmacia && (
-                    <span className="text-xs text-red-500">Seleccione una farmacia.</span>
+                    <span className="text-xs text-red-500">Seleccione una sucursal.</span>
                 )}
             </div>
             <div className="mb-4 w-full max-w-md">
@@ -93,7 +93,7 @@ const AgregarCuadrePage: React.FC = () => {
                 onClick={handleAgregarCuadre}
                 disabled={!isFormValid}
             >
-                Agregar Cuadre
+                Agregar
             </button>
             {mostrarModal && (
                 <AgregarCuadreModal

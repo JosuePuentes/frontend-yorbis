@@ -35,8 +35,8 @@ const LoginPage: React.FC = () => {
             localStorage.setItem("usuario", JSON.stringify(data.usuario));
             console.log('[Login] Token guardado en localStorage:', localStorage.getItem("access_token") ? '✅ Token guardado correctamente' : '❌ Error al guardar token');
 
-            // Navegar a la página principal
-            navigate("/");
+            // Navegar al dashboard
+            navigate("/dashboard");
 
             // Recargar la página para reflejar los cambios
             setTimeout(() => {
