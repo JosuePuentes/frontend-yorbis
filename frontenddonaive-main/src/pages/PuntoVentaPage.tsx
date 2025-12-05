@@ -2403,7 +2403,6 @@ const PuntoVentaPage: React.FC = () => {
                   })
                   .map((producto) => {
                   const stock = producto.cantidad ?? producto.stock ?? 0;
-                  const precio = producto.precio_usd || producto.precio;
                   const tieneStock = stock > 0;
                   const mostrarStock = productoConStockAbierto === producto.id;
                   
