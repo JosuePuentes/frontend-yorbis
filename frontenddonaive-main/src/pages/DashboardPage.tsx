@@ -54,15 +54,17 @@ const DashboardPage: React.FC = () => {
     let totalZelleUsd = 0;
     let totalBs = 0;
 
-    sortedFarmacias.forEach((farm) => {
-      const venta = ventas[farm.id] || {};
-      totalVentas += venta.totalVentas || 0;
-      totalEfectivoUsd += venta.efectivoUsd || 0;
-      totalZelleUsd += venta.zelleUsd || 0;
-      totalBs += venta.totalBs || 0;
-      totalGastos += gastosPorFarmacia[farm.id] || 0;
-      totalCuentasPorPagar += cuentasActivasPorFarmacia[farm.id] || 0;
-    });
+    if (sortedFarmacias && Array.isArray(sortedFarmacias)) {
+      sortedFarmacias.forEach((farm) => {
+        const venta = ventas[farm.id] || {};
+        totalVentas += venta.totalVentas || 0;
+        totalEfectivoUsd += venta.efectivoUsd || 0;
+        totalZelleUsd += venta.zelleUsd || 0;
+        totalBs += venta.totalBs || 0;
+        totalGastos += gastosPorFarmacia[farm.id] || 0;
+        totalCuentasPorPagar += cuentasActivasPorFarmacia[farm.id] || 0;
+      });
+    }
 
     return {
       totalVentas: Number(totalVentas.toFixed(2)),
@@ -77,6 +79,9 @@ const DashboardPage: React.FC = () => {
 
   // Datos para gráfica de barras de ventas por sucursal
   const datosVentasPorSucursal = useMemo(() => {
+    if (!sortedFarmacias || !Array.isArray(sortedFarmacias)) {
+      return [];
+    }
     return sortedFarmacias.map((farm) => ({
       nombre: farm.nombre.length > 15 ? farm.nombre.substring(0, 15) + '...' : farm.nombre,
       ventas: ventas[farm.id]?.totalVentas || 0,
@@ -304,7 +309,7 @@ const DashboardPage: React.FC = () => {
                   fill="#8884d8"
                   dataKey="value"
                 >
-                  {datosMetodosPago.map((_, index) => (
+                  {(datosMetodosPago && Array.isArray(datosMetodosPago) ? datosMetodosPago : []).map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
@@ -365,7 +370,7 @@ const DashboardPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {sortedFarmacias.map((farm) => {
+                {(sortedFarmacias && Array.isArray(sortedFarmacias) ? sortedFarmacias : []).map((farm) => {
                   const venta = ventas[farm.id] || {};
                   const gastos = gastosPorFarmacia[farm.id] || 0;
                   const cuentas = cuentasActivasPorFarmacia[farm.id] || 0;

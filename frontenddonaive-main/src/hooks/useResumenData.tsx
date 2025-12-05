@@ -487,6 +487,9 @@ export function useResumenData() {
   }, [farmacias, cuadresPorFarmacia, fechaInicio, fechaFin, ventasPuntoVenta, ventas]);
 
   const sortedFarmacias = useMemo(() => {
+    if (!farmacias || !Array.isArray(farmacias)) {
+      return [];
+    }
     return [...farmacias].sort((a, b) => {
       const ventasA = ventas[a.id]?.totalVentas || 0;
       const ventasB = ventas[b.id]?.totalVentas || 0;

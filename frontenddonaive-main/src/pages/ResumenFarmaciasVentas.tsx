@@ -365,7 +365,7 @@ const ResumenFarmaciasVentas: React.FC = () => {
         </header>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sortedFarmacias.map((farm, idx) => {
+          {(sortedFarmacias && Array.isArray(sortedFarmacias) ? sortedFarmacias : []).map((farm, idx) => {
             // ▼▼▼ CORRECCIÓN AQUÍ ▼▼▼
             // 1. Accede a los datos de pago para esta farmacia desde el objeto que nos da el hook.
             const pagosDelPeriodo = totalPagosPorFarmacia[farm.id] || {
