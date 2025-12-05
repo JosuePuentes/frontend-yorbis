@@ -40,8 +40,15 @@ interface Producto {
   id: string;
   nombre: string;
   codigo?: string;
+  codigo_producto?: string; // Alternativa del backend
+  descripcion?: string; // Alternativa del backend
+  descripcion_producto?: string; // Alternativa del backend
+  marca?: string; // Alternativa del backend
+  marca_producto?: string; // Alternativa del backend
   precio: number;
   precio_usd?: number;
+  precio_unitario?: number; // Alternativa del backend
+  precio_venta?: number; // Alternativa del backend
   stock?: number;
   cantidad?: number; // Stock total en la sucursal actual (suma de lotes)
   lotes?: Lote[]; // Array de lotes con fechas de vencimiento
