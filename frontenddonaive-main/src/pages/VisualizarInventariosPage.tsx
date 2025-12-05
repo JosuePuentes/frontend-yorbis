@@ -46,6 +46,10 @@ const VisualizarInventariosPage: React.FC = () => {
   const [cargandoProductos, setCargandoProductos] = useState(false);
   const [busquedaProducto, setBusquedaProducto] = useState("");
   const [vistaTabla, setVistaTabla] = useState(true); // true = vista tabla productos (PREDETERMINADA), false = vista inventarios
+  const [productoAEditar, setProductoAEditar] = useState<any | null>(null);
+  const [productoAEliminar, setProductoAEliminar] = useState<any | null>(null);
+  const [showEliminarProductoModal, setShowEliminarProductoModal] = useState(false);
+  const [eliminandoProducto, setEliminandoProducto] = useState(false);
 
   const fetchInventarios = async (): Promise<Inventario[]> => {
     setLoading(true);
@@ -770,6 +774,7 @@ const VisualizarInventariosPage: React.FC = () => {
                       <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Precio</th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Existencia</th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Total $</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-200">
@@ -804,6 +809,31 @@ const VisualizarInventariosPage: React.FC = () => {
                           <td className="px-4 py-3 text-sm text-right font-semibold text-slate-900">
                             ${total.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
+                          <td className="px-4 py-3 text-sm text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setProductoAEditar(producto)}
+                                className="flex items-center gap-1"
+                              >
+                                <Edit className="w-4 h-4" />
+                                Editar
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => {
+                                  setProductoAEliminar(producto);
+                                  setShowEliminarProductoModal(true);
+                                }}
+                                className="flex items-center gap-1"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Eliminar
+                              </Button>
+                            </div>
+                          </td>
                         </tr>
                       );
                     })}
@@ -834,6 +864,7 @@ const VisualizarInventariosPage: React.FC = () => {
                           return sum + (cantidad * costo);
                         }, 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
+                      <td></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -1001,6 +1032,96 @@ const VisualizarInventariosPage: React.FC = () => {
             sucursalId={farmacias.find(f => f.id === inventarioSeleccionado.farmacia || f.nombre === inventarioSeleccionado.farmacia)?.id || inventarioSeleccionado.farmacia}
             onSuccess={handleCerrarModal}
           />
+        )}
+
+        {/* Modal de editar producto */}
+        {productoAEditar && (
+          <ModificarItemInventarioModal
+            open={!!productoAEditar}
+            onClose={() => {
+              setProductoAEditar(null);
+              // Recargar productos después de editar
+              cargarTodosLosProductos();
+            }}
+            inventarioId={productoAEditar.inventario_id || productoAEditar.compra_id || ""}
+            sucursalId={productoAEditar.sucursal_id || ""}
+            onSuccess={() => {
+              setProductoAEditar(null);
+              cargarTodosLosProductos();
+            }}
+          />
+        )}
+
+        {/* Modal de confirmación de eliminación de producto */}
+        {showEliminarProductoModal && productoAEliminar && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-3 text-slate-800">Confirmar eliminación</h3>
+              <p className="mb-5 text-slate-600 text-sm">
+                ¿Está seguro que desea eliminar el producto{" "}
+                <span className="font-bold text-red-600">
+                  {productoAEliminar.codigo || productoAEliminar.descripcion}
+                </span>?
+              </p>
+              <p className="mb-5 text-red-600 text-sm font-medium">
+                ⚠️ Esta acción eliminará el producto del inventario. Esta acción no se puede deshacer.
+              </p>
+              <div className="flex justify-end gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowEliminarProductoModal(false);
+                    setProductoAEliminar(null);
+                  }}
+                  disabled={eliminandoProducto}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={async () => {
+                    if (!productoAEliminar) return;
+                    setEliminandoProducto(true);
+                    try {
+                      const token = localStorage.getItem("access_token");
+                      if (!token) throw new Error("No se encontró el token de autenticación");
+
+                      // Intentar eliminar desde el inventario
+                      if (productoAEliminar.inventario_id) {
+                        const res = await fetch(
+                          `${API_BASE_URL}/inventarios/${productoAEliminar.inventario_id}/items/${productoAEliminar._id}`,
+                          {
+                            method: "DELETE",
+                            headers: {
+                              "Authorization": `Bearer ${token}`,
+                            },
+                          }
+                        );
+
+                        if (!res.ok && res.status !== 404) {
+                          const errorData = await res.json().catch(() => null);
+                          throw new Error(errorData?.detail || errorData?.message || "Error al eliminar producto");
+                        }
+                      }
+
+                      // Recargar productos
+                      await cargarTodosLosProductos();
+                      setShowEliminarProductoModal(false);
+                      setProductoAEliminar(null);
+                    } catch (err: any) {
+                      setError(err.message || "Error al eliminar el producto");
+                      console.error("Error al eliminar producto:", err);
+                    } finally {
+                      setEliminandoProducto(false);
+                    }
+                  }}
+                  disabled={eliminandoProducto}
+                >
+                  {eliminandoProducto ? "Eliminando..." : "Eliminar"}
+                </Button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Modal de confirmación de eliminación */}
