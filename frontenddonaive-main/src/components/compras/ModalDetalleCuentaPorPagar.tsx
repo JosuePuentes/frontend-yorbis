@@ -355,7 +355,7 @@ const ModalDetalleCuentaPorPagar: React.FC<ModalDetalleCuentaPorPagarProps> = ({
       [""],
       ["ITEMS"],
       ["Código", "Descripción", "Marca", "Cantidad", "Costo", "Utilidad %", "Precio Unitario", "Total Item"],
-      ...compra.items.map((item: any) => [
+      ...(compraNormalizada.items || []).map((item: any) => [
         item.codigo,
         item.descripcion,
         item.marca || "",
@@ -469,7 +469,7 @@ const ModalDetalleCuentaPorPagar: React.FC<ModalDetalleCuentaPorPagarProps> = ({
       </tr>
     </thead>
     <tbody>
-      ${compra.items.map((item: any) => `
+      ${(compraNormalizada.items || []).map((item: any) => `
         <tr>
           <td>${item.codigo}</td>
           <td>${item.descripcion || "-"}</td>
