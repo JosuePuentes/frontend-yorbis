@@ -206,9 +206,10 @@ const VisualizarInventariosPage: React.FC = () => {
   // Cargar productos cuando se cambia a vista tabla
   useEffect(() => {
     if (vistaTabla && todosLosProductos.length === 0 && !cargandoProductos) {
+      console.log("🔄 [INVENTARIOS] Cambiando a vista tabla, cargando productos...");
       cargarTodosLosProductos();
     }
-  }, [vistaTabla]);
+  }, [vistaTabla, todosLosProductos.length, cargandoProductos]);
 
   // Filtrar productos según búsqueda
   const productosFiltrados = useMemo(() => {
@@ -629,36 +630,39 @@ const VisualizarInventariosPage: React.FC = () => {
           <div className="flex gap-2">
             <Button
               onClick={() => {
-                setVistaTabla(!vistaTabla);
-                if (!vistaTabla && todosLosProductos.length === 0) {
+                console.log("🔄 [INVENTARIOS] Cambiando vista, vistaTabla actual:", vistaTabla);
+                const nuevaVista = !vistaTabla;
+                setVistaTabla(nuevaVista);
+                if (nuevaVista && todosLosProductos.length === 0 && !cargandoProductos) {
+                  console.log("🔄 [INVENTARIOS] Cargando productos desde botón...");
                   cargarTodosLosProductos();
                 }
               }}
               variant={vistaTabla ? "default" : "outline"}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
             >
-              {vistaTabla ? "Vista Inventarios" : "Vista Productos"}
+              {vistaTabla ? "← Vista Inventarios" : "Vista Productos →"}
             </Button>
             {inventariosFiltrados.length > 0 && !vistaTabla && (
-              <Button
-                onClick={handleExportarTodos}
-                disabled={loading}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                <Download className="h-4 w-4" />
-                Exportar Todos a Excel
-              </Button>
-            )}
+            <Button
+              onClick={handleExportarTodos}
+              disabled={loading}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Exportar Todos a Excel
+            </Button>
+          )}
           </div>
         </div>
         
         {/* Componente para subir inventario desde Excel - Solo mostrar si no está en vista tabla */}
         {!vistaTabla && (
-          <UploadInventarioExcel
-            sucursales={farmacias}
-            onSuccess={fetchInventarios}
-          />
+        <UploadInventarioExcel
+          sucursales={farmacias}
+          onSuccess={fetchInventarios}
+        />
         )}
 
         {error && (
