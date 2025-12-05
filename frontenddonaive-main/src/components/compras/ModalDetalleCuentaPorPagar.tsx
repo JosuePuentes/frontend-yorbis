@@ -43,7 +43,8 @@ interface Pago {
 
 interface Compra {
   _id: string;
-  proveedor_id: string;
+  proveedor_id?: string; // Opcional para compatibilidad
+  proveedorId?: string; // Alternativa del backend
   proveedor?: Proveedor;
   fecha: string;
   pagar_en_dolar_negro: boolean;
@@ -62,6 +63,11 @@ interface Compra {
   dias_restantes?: number;
   en_mora?: boolean;
   fecha_vencimiento?: Date | null;
+  proveedor_nombre?: string; // Para fallback
+  proveedorNombre?: string; // Alternativa del backend
+  sucursal_id?: string;
+  fecha_compra?: string;
+  fecha_creacion?: string;
 }
 
 interface Banco {
