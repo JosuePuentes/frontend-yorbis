@@ -150,33 +150,103 @@ const ModalCrearCompra: React.FC<ModalCrearCompraProps> = ({
             const items = await resItems.json();
             const itemsArray = Array.isArray(items) ? items : [];
 
-            // Filtrar items que coincidan con la búsqueda
+            // Filtrar items que coincidan con la búsqueda (normalizando campos primero)
             const itemsFiltrados = itemsArray.filter((item: any) => {
-              const codigo = (item.codigo || "").toLowerCase();
-              const descripcion = (item.descripcion || "").toLowerCase();
-              const marca = (item.marca || "").toLowerCase();
+              // Normalizar campos para búsqueda
+              const codigo = (item.codigo || item.codigo_producto || "").toLowerCase();
+              const descripcion = (item.descripcion || item.nombre || item.descripcion_producto || "").toLowerCase();
+              const marca = (item.marca || item.marca_producto || "").toLowerCase();
               return (
                 codigo.includes(busquedaLower) ||
                 descripcion.includes(busquedaLower) ||
                 marca.includes(busquedaLower)
               );
             });
+          } else if (resItems.status === 404) {
+            // Intentar endpoint alternativo
+            try {
+              const resAlt = await fetch(
+                `${API_BASE_URL}/productos?inventario_id=${inventario._id}`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                  },
+                }
+              );
+              if (resAlt.ok) {
+                const data = await resAlt.json();
+                const productos = Array.isArray(data) ? data : (data.productos || data.items || []);
+                
+                // Filtrar items que coincidan con la búsqueda (normalizando campos primero)
+                const itemsFiltrados = productos.filter((item: any) => {
+                  // Normalizar campos para búsqueda
+                  const codigo = (item.codigo || item.codigo_producto || "").toLowerCase();
+                  const descripcion = (item.descripcion || item.nombre || item.descripcion_producto || "").toLowerCase();
+                  const marca = (item.marca || item.marca_producto || "").toLowerCase();
+                  return (
+                    codigo.includes(busquedaLower) ||
+                    descripcion.includes(busquedaLower) ||
+                    marca.includes(busquedaLower)
+                  );
+                });
+                
+                // Agregar a la lista (evitar duplicados por código)
+                itemsFiltrados.forEach((item: any) => {
+                  // Normalizar datos del producto - el backend puede usar diferentes nombres de campos
+                  const productoNormalizado = {
+                    _id: item._id || item.id,
+                    codigo: item.codigo || item.codigo_producto || "",
+                    descripcion: item.descripcion || item.nombre || item.descripcion_producto || "",
+                    marca: item.marca || item.marca_producto || "",
+                    costo_unitario: item.costo_unitario || item.costo || 0,
+                    precio_unitario: item.precio_unitario || item.precio || 0,
+                    cantidad: item.cantidad || item.existencia || item.stock || 0,
+                    lotes: item.lotes || [],
+                  };
+                  
+                  const existe = todosLosProductos.some(
+                    (p) => p.codigo === productoNormalizado.codigo
+                  );
+                  if (!existe && productoNormalizado.codigo) {
+                    todosLosProductos.push(productoNormalizado);
+                    console.log(`✅ [COMPRAS] Producto encontrado (endpoint alternativo):`, {
+                      codigo: productoNormalizado.codigo,
+                      descripcion: productoNormalizado.descripcion,
+                      marca: productoNormalizado.marca
+                    });
+                  }
+                });
+              }
+            } catch (err) {
+              console.warn(`⚠️ [COMPRAS] Endpoint alternativo falló para inventario ${inventario._id}:`, err);
+            }
+          }
+          
+          if (resItems.ok) {
 
             // Agregar a la lista (evitar duplicados por código)
             itemsFiltrados.forEach((item: any) => {
+              // Normalizar datos del producto - el backend puede usar diferentes nombres de campos
+              const productoNormalizado = {
+                _id: item._id || item.id,
+                codigo: item.codigo || item.codigo_producto || "",
+                descripcion: item.descripcion || item.nombre || item.descripcion_producto || "",
+                marca: item.marca || item.marca_producto || "",
+                costo_unitario: item.costo_unitario || item.costo || 0,
+                precio_unitario: item.precio_unitario || item.precio || 0,
+                cantidad: item.cantidad || item.existencia || item.stock || 0,
+                lotes: item.lotes || [],
+              };
+              
               const existe = todosLosProductos.some(
-                (p) => p.codigo === item.codigo
+                (p) => p.codigo === productoNormalizado.codigo
               );
-              if (!existe) {
-                todosLosProductos.push({
-                  _id: item._id,
-                  codigo: item.codigo,
-                  descripcion: item.descripcion,
-                  marca: item.marca,
-                  costo_unitario: item.costo_unitario || item.costo,
-                  precio_unitario: item.precio_unitario || item.precio,
-                  cantidad: item.cantidad || item.existencia,
-                  lotes: item.lotes || [],
+              if (!existe && productoNormalizado.codigo) {
+                todosLosProductos.push(productoNormalizado);
+                console.log(`✅ [COMPRAS] Producto encontrado:`, {
+                  codigo: productoNormalizado.codigo,
+                  descripcion: productoNormalizado.descripcion,
+                  marca: productoNormalizado.marca
                 });
               }
             });
@@ -515,7 +585,16 @@ const ModalCrearCompra: React.FC<ModalCrearCompraProps> = ({
         pagarEnDolarNegro,
       });
     } catch (err: any) {
-      setError(err.message || "Error al guardar compra");
+      // Mostrar mensaje de error más descriptivo
+      let errorMessage = err.message || "Error al guardar compra";
+      
+      // Si es un error de CORS, proporcionar información adicional
+      if (errorMessage.includes("CORS") || errorMessage.includes("conexión con el servidor")) {
+        errorMessage = "Error de conexión: El backend no está permitiendo peticiones desde este origen. " +
+          "Por favor, contacta al administrador para configurar CORS en el backend.";
+      }
+      
+      setError(errorMessage);
       console.error("❌ [COMPRAS] Error al guardar compra:", err);
     } finally {
       setLoading(false);
