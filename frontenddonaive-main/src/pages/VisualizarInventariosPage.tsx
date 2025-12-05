@@ -108,95 +108,98 @@ const VisualizarInventariosPage: React.FC = () => {
     fetchInventarios();
   }, []);
 
-  // Cargar todos los productos de todos los inventarios
+  // Cargar todos los productos desde las compras (para obtener utilidad de la compra)
   const cargarTodosLosProductos = async () => {
     setCargandoProductos(true);
     try {
       const token = localStorage.getItem("access_token");
       if (!token) return;
 
-      // Obtener todos los inventarios
-      const resInventarios = await fetch(`${API_BASE_URL}/inventarios`, {
+      // Obtener todas las compras
+      const resCompras = await fetch(`${API_BASE_URL}/compras`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
 
-      if (!resInventarios.ok) {
-        throw new Error("Error al obtener inventarios");
+      if (!resCompras.ok) {
+        throw new Error("Error al obtener compras");
       }
 
-      const inventariosData = await resInventarios.json();
-      const inventariosArray = Array.isArray(inventariosData) ? inventariosData : [];
+      const comprasData = await resCompras.json();
+      const comprasArray = Array.isArray(comprasData) ? comprasData : [];
 
-      // Cargar items de todos los inventarios en paralelo
-      const promesasItems = inventariosArray.map(async (inventario: any) => {
-        try {
-          const resItems = await fetch(`${API_BASE_URL}/inventarios/${inventario._id}/items`, {
-            headers: { "Authorization": `Bearer ${token}` }
-          });
+      console.log(`🔍 [INVENTARIOS] Compras obtenidas: ${comprasArray.length}`);
 
-          if (resItems.ok) {
-            const items = await resItems.json();
-            const itemsArray = Array.isArray(items) ? items : [];
-            
-            // Agregar información del inventario a cada item
-            return itemsArray.map((item: any) => ({
-              ...item,
-              inventario_id: inventario._id,
-              fecha_carga: inventario.fecha,
-              sucursal_id: inventario.farmacia,
-              sucursal_nombre: farmacias.find(f => f.id === inventario.farmacia || f.nombre === inventario.farmacia)?.nombre || inventario.farmacia
-            }));
-          } else if (resItems.status === 404) {
-            // Intentar endpoint alternativo
-            try {
-              const resAlt = await fetch(`${API_BASE_URL}/productos?inventario_id=${inventario._id}`, {
-                headers: { "Authorization": `Bearer ${token}` }
-              });
-              if (resAlt.ok) {
-                const data = await resAlt.json();
-                const productos = Array.isArray(data) ? data : (data.productos || data.items || []);
-                return productos.map((item: any) => ({
-                  ...item,
-                  inventario_id: inventario._id,
-                  fecha_carga: inventario.fecha,
-                  sucursal_id: inventario.farmacia,
-                  sucursal_nombre: farmacias.find(f => f.id === inventario.farmacia || f.nombre === inventario.farmacia)?.nombre || inventario.farmacia
-                }));
-              }
-            } catch (err) {
-              console.warn(`Error al obtener productos alternativos para inventario ${inventario._id}:`, err);
+      // Extraer productos de todas las compras
+      const todosLosProductos: any[] = [];
+
+      comprasArray.forEach((compra: any) => {
+        // Normalizar items/productos - el backend puede enviar "productos" o "items"
+        const items = compra.items || compra.productos || [];
+        const fechaCompra = compra.fecha || compra.fecha_compra || compra.fecha_creacion;
+        const sucursalId = compra.sucursal_id || compra.farmacia || "";
+        const sucursalNombre = farmacias.find(f => f.id === sucursalId || f.nombre === sucursalId)?.nombre || sucursalId;
+
+        items.forEach((item: any) => {
+          // Obtener utilidad de la compra (puede venir como utilidad, utilidad_contable, o porcentaje)
+          const utilidadPorcentaje = Number(item.utilidad || item.utilidad_contable || item.porcentaje_ganancia || 0);
+          const costo = Number(item.precioUnitario || item.precio_unitario || item.costo || item.costo_unitario || 0);
+          
+          // Calcular utilidad en dinero si viene como porcentaje
+          let utilidadEnDinero = 0;
+          if (utilidadPorcentaje > 0 && utilidadPorcentaje <= 100) {
+            // Es porcentaje, calcular utilidad en dinero
+            utilidadEnDinero = (costo * utilidadPorcentaje) / 100;
+          } else if (utilidadPorcentaje > 100) {
+            // Es utilidad en dinero directamente
+            utilidadEnDinero = utilidadPorcentaje;
+          } else {
+            // Intentar obtener de precio_venta - costo
+            const precioVenta = Number(item.precio_venta || item.precioVenta || 0);
+            if (precioVenta > 0) {
+              utilidadEnDinero = precioVenta - costo;
             }
           }
-          return [];
-        } catch (err) {
-          console.error(`Error al obtener items del inventario ${inventario._id}:`, err);
-          return [];
-        }
+
+          // Calcular precio = costo + utilidad
+          const precio = costo + utilidadEnDinero;
+
+          const producto = {
+            _id: item._id || item.id || `${compra._id}_${item.codigo || Math.random()}`,
+            codigo: item.codigo || item.codigo_producto || "",
+            descripcion: item.nombre || item.descripcion || item.descripcion_producto || "",
+            marca: item.marca || item.marca_producto || "",
+            costo: costo,
+            costo_unitario: costo,
+            utilidad: utilidadEnDinero,
+            utilidad_porcentaje: utilidadPorcentaje > 0 && utilidadPorcentaje <= 100 ? utilidadPorcentaje : ((utilidadEnDinero / (costo || 1)) * 100),
+            precio: precio,
+            precio_unitario: precio,
+            cantidad: Number(item.cantidad || item.existencia || item.stock || 0),
+            existencia: Number(item.cantidad || item.existencia || item.stock || 0),
+            fecha_carga: fechaCompra,
+            sucursal_id: sucursalId,
+            sucursal_nombre: sucursalNombre,
+            compra_id: compra._id
+          };
+
+          todosLosProductos.push(producto);
+        });
       });
 
-      const resultados = await Promise.all(promesasItems);
-      const productosPlanaos = resultados.flat();
-      
-      // Normalizar productos
-      const productosNormalizados = productosPlanaos.map((item: any) => ({
-        ...item,
-        codigo: item.codigo || item.codigo_producto || "",
-        descripcion: item.descripcion || item.nombre || item.descripcion_producto || "",
-        marca: item.marca || item.marca_producto || "",
-        costo: item.costo_unitario || item.costo || 0,
-        costo_unitario: item.costo_unitario || item.costo || 0,
-        precio: item.precio_unitario || item.precio || 0,
-        precio_unitario: item.precio_unitario || item.precio || 0,
-        cantidad: item.cantidad || item.existencia || item.stock || 0,
-        existencia: item.cantidad || item.existencia || item.stock || 0,
-        utilidad: item.utilidad_contable ?? (item.precio_unitario || item.precio || 0) - (item.costo_unitario || item.costo || 0),
-        porcentaje_ganancia: item.porcentaje_ganancia ?? (((item.precio_unitario || item.precio || 0) - (item.costo_unitario || item.costo || 0)) / (item.costo_unitario || item.costo || 1)) * 100
-      }));
+      console.log(`✅ [INVENTARIOS] Productos cargados desde compras: ${todosLosProductos.length}`);
+      if (todosLosProductos.length > 0) {
+        console.log(`📦 [INVENTARIOS] Primer producto:`, {
+          codigo: todosLosProductos[0].codigo,
+          descripcion: todosLosProductos[0].descripcion,
+          costo: todosLosProductos[0].costo,
+          utilidad: todosLosProductos[0].utilidad,
+          precio: todosLosProductos[0].precio
+        });
+      }
 
-      setTodosLosProductos(productosNormalizados);
-      console.log(`✅ [INVENTARIOS] Productos cargados: ${productosNormalizados.length}`);
+      setTodosLosProductos(todosLosProductos);
     } catch (err: any) {
-      console.error("Error al cargar todos los productos:", err);
+      console.error("Error al cargar productos desde compras:", err);
       setError(err.message || "Error al cargar productos");
     } finally {
       setCargandoProductos(false);
@@ -772,10 +775,10 @@ const VisualizarInventariosPage: React.FC = () => {
                   <tbody className="bg-white divide-y divide-slate-200">
                     {productosFiltrados.map((producto: any, index: number) => {
                       const costo = Number(producto.costo_unitario || producto.costo || 0);
-                      const precio = Number(producto.precio_unitario || producto.precio || 0);
+                      const utilidad = Number(producto.utilidad || 0); // Utilidad viene de la compra
+                      const precio = Number(producto.precio_unitario || producto.precio || (costo + utilidad)); // Precio = Costo + Utilidad
                       const cantidad = Number(producto.cantidad || producto.existencia || 0);
-                      const utilidad = Number(producto.utilidad || (precio - costo));
-                      const porcentajeGanancia = Number(producto.porcentaje_ganancia || ((precio - costo) / (costo || 1)) * 100);
+                      const porcentajeGanancia = Number(producto.utilidad_porcentaje || producto.porcentaje_ganancia || ((utilidad / (costo || 1)) * 100));
                       const total = costo * cantidad; // Total = Costo × Cantidad
                       
                       return (
