@@ -3,8 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { DollarSign, Upload, X } from "lucide-react";
+import { DollarSign, X } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api";
 import UpFilePagosCPP from "@/components/upfile/UpFilePagosCPP";
 import ImageDisplay from "@/components/upfile/ImageDisplay";
@@ -308,14 +307,16 @@ const ModalPagarAbonar: React.FC<ModalPagarAbonarProps> = ({
             </label>
             {!comprobanteArchivo ? (
               <UpFilePagosCPP
-                onFileUploaded={(url) => {
-                  console.log("📎 [PAGAR] Comprobante subido:", url);
-                  setComprobanteArchivo(url);
+                onUploadSuccess={(objectName: string) => {
+                  console.log("📎 [PAGAR] Comprobante subido:", objectName);
+                  setComprobanteArchivo(objectName);
                 }}
+                label="Subir comprobante"
+                maxSizeMB={5}
               />
             ) : (
               <div className="relative">
-                <ImageDisplay imageUrl={comprobanteArchivo} />
+                <ImageDisplay imageName={comprobanteArchivo} alt="Comprobante de pago" />
                 <Button
                   type="button"
                   variant="outline"
