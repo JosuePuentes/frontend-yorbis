@@ -289,9 +289,14 @@ const ModalDetalleCuentaPorPagar: React.FC<ModalDetalleCuentaPorPagarProps> = ({
 
   const descuentoProntoPago = calcularDescuentoProntoPago();
   const totalFacturaConDescuento = descuentoProntoPago.totalConDescuento;
-  const montoRestanteConDescuento = (compra.monto_restante !== undefined && compra.monto_restante !== null) 
-    ? compra.monto_restante 
-    : totalFacturaConDescuento;
+  
+  // Calcular total abonado sumando todos los pagos
+  const totalAbonado = compraNormalizada.pagos?.reduce((sum: number, pago: Pago) => {
+    return sum + Number(pago.monto || pago.monto_usd || pago.monto_bs || 0);
+  }, 0) || (compra.monto_abonado || 0);
+  
+  // Calcular monto restante: total factura con descuento - total abonado
+  const montoRestanteConDescuento = totalFacturaConDescuento - totalAbonado;
 
   // Calcular monto en Bs según tasa BCV
   useEffect(() => {
@@ -720,6 +725,49 @@ const ModalDetalleCuentaPorPagar: React.FC<ModalDetalleCuentaPorPagarProps> = ({
                 </div>
               </div>
             )}
+          </Card>
+
+          {/* Totales */}
+          <Card className="p-4 mb-4 bg-slate-50">
+            <h3 className="font-semibold mb-3">Resumen Financiero</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-red-50 p-3 rounded-lg border border-red-200">
+                <div className="text-sm text-slate-600 mb-1">Total Adeudado</div>
+                <div className="text-xl font-bold text-red-600">
+                  ${montoRestanteConDescuento.toFixed(2)}
+                </div>
+              </div>
+              <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                <div className="text-sm text-slate-600 mb-1">Total Abonado</div>
+                <div className="text-xl font-bold text-yellow-600">
+                  ${totalAbonado.toFixed(2)}
+                </div>
+              </div>
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                <div className="text-sm text-slate-600 mb-1">Total Factura</div>
+                <div className="text-xl font-bold text-blue-600">
+                  ${(compra.total_precio_venta || compra.total || 0).toFixed(2)}
+                </div>
+              </div>
+              {descuentoProntoPago.aplica ? (
+                <div className="bg-green-50 p-3 rounded-lg border-2 border-green-300">
+                  <div className="text-sm font-semibold text-green-800 mb-1">
+                    💰 Ahorro Pronto Pago
+                  </div>
+                  <div className="text-xl font-bold text-green-600">
+                    ${descuentoProntoPago.montoDescuento.toFixed(2)}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                  <div className="text-sm text-slate-600 mb-1">Ahorro Pronto Pago</div>
+                  <div className="text-xl font-bold text-slate-400">$0.00</div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    Sin descuentos disponibles
+                  </div>
+                </div>
+              )}
+            </div>
           </Card>
 
           {/* Items de la Compra */}

@@ -2,8 +2,9 @@ import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Filter } from "lucide-react";
+import { FileText, Filter, DollarSign } from "lucide-react";
 import ModalDetalleCuentaPorPagar from "@/components/compras/ModalDetalleCuentaPorPagar";
+import ModalPagarAbonar from "@/components/compras/ModalPagarAbonar";
 import { fetchWithAuth } from "@/lib/api";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -63,6 +64,8 @@ const CuentasPorPagarPage: React.FC = () => {
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [sucursalFiltro, setSucursalFiltro] = useState<string>("todas");
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [compraParaPagar, setCompraParaPagar] = useState<Compra | null>(null);
+  const [showModalPagar, setShowModalPagar] = useState(false);
 
   // Cargar compras
   const fetchCompras = async () => {
@@ -630,7 +633,14 @@ const CuentasPorPagarPage: React.FC = () => {
     await fetchCompras();
     setShowModalDetalle(false);
     setCompraSeleccionada(null);
+    setShowModalPagar(false);
+    setCompraParaPagar(null);
     console.log("✅ [PAGO] Compras recargadas");
+  };
+
+  const handlePagarAbonar = (compra: Compra) => {
+    setCompraParaPagar(compra);
+    setShowModalPagar(true);
   };
 
   const getEstadoBadge = (compra: Compra) => {
@@ -835,14 +845,27 @@ const CuentasPorPagarPage: React.FC = () => {
                       <td className="p-3 text-right text-red-600 font-semibold">${((compra.monto_restante !== undefined && compra.monto_restante !== null) ? compra.monto_restante : (compra.total_precio_venta || 0)).toFixed(2)}</td>
                       <td className="p-3 text-center">{getEstadoBadge(compra)}</td>
                       <td className="p-3 text-center">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleVerDetalle(compra)}
-                        >
-                          <FileText className="h-4 w-4 mr-1" />
-                          Ver Detalle
-                        </Button>
+                        <div className="flex gap-2 justify-center">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleVerDetalle(compra)}
+                          >
+                            <FileText className="h-4 w-4 mr-1" />
+                            Ver Detalle
+                          </Button>
+                          {(compra.estado !== "pagada" && (compra.monto_restante || compra.total_precio_venta || 0) > 0) && (
+                            <Button
+                              size="sm"
+                              variant="default"
+                              className="bg-green-600 hover:bg-green-700"
+                              onClick={() => handlePagarAbonar(compra)}
+                            >
+                              <DollarSign className="h-4 w-4 mr-1" />
+                              Pagar/Abonar
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -861,6 +884,19 @@ const CuentasPorPagarPage: React.FC = () => {
               setCompraSeleccionada(null);
             }}
             compra={compraSeleccionada}
+            onPagoCompletado={handlePagoCompletado}
+          />
+        )}
+
+        {/* Modal de Pagar/Abonar */}
+        {showModalPagar && compraParaPagar && (
+          <ModalPagarAbonar
+            open={showModalPagar}
+            onClose={() => {
+              setShowModalPagar(false);
+              setCompraParaPagar(null);
+            }}
+            compra={compraParaPagar}
             onPagoCompletado={handlePagoCompletado}
           />
         )}
