@@ -319,6 +319,10 @@ const PuntoVentaPage: React.FC = () => {
     fetchData();
   }, []);
 
+  // Caché simple para búsquedas recientes
+  const cacheBusquedas = React.useRef<Map<string, { productos: any[]; timestamp: number }>>(new Map());
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
+
   // Búsqueda de productos en tiempo real optimizada
   useEffect(() => {
     let abortController: AbortController | null = null;
@@ -327,13 +331,23 @@ const PuntoVentaPage: React.FC = () => {
     const busqueda = busquedaItem.trim();
     
     if (busqueda.length >= 1 && sucursalSeleccionada) {
+      // Verificar caché primero
+      const cacheKey = `${sucursalSeleccionada.id}_${busqueda.toLowerCase()}`;
+      const cached = cacheBusquedas.current.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
+        console.log(`✅ [PUNTO_VENTA] Usando caché para: "${busqueda}"`);
+        setProductosEncontrados(cached.productos);
+        setBuscandoProductos(false);
+        return;
+      }
+
       // Detectar si es un código de barras (solo números y longitud >= 8)
       const esCodigoBarras = /^\d{8,}$/.test(busqueda);
       
-      // Para códigos de barras, búsqueda inmediata (0ms)
-      // Para búsquedas cortas (1-2 caracteres), debounce muy corto (20ms)
-      // Para búsquedas más largas, debounce de 30ms
-      const debounceTime = esCodigoBarras ? 0 : (busqueda.length <= 2 ? 20 : 30);
+      // Para códigos de barras, búsqueda más rápida (150ms)
+      // Para búsquedas cortas (1-2 caracteres), debounce de 300ms
+      // Para búsquedas más largas, debounce de 400ms
+      const debounceTime = esCodigoBarras ? 150 : (busqueda.length <= 2 ? 300 : 400);
       
       timeoutId = setTimeout(async () => {
         // Crear nuevo AbortController para esta búsqueda
@@ -378,72 +392,9 @@ const PuntoVentaPage: React.FC = () => {
               }
             }
             
-            // Obtener precios desde compras si los productos no tienen precio
-            if (productosArray.length > 0) {
-              try {
-                const token = localStorage.getItem("access_token");
-                if (token) {
-                  const resCompras = await fetch(`${API_BASE_URL}/compras`, {
-                    headers: { "Authorization": `Bearer ${token}` },
-                    signal: abortController.signal
-                  });
-                  
-                  if (resCompras.ok && !abortController.signal.aborted) {
-                    const comprasData = await resCompras.json();
-                    const comprasArray = Array.isArray(comprasData) ? comprasData : [];
-                    
-                    // Crear mapa de precios por código
-                    const preciosMap = new Map<string, number>();
-                    comprasArray.forEach((compra: any) => {
-                      const items = compra.items || compra.productos || [];
-                      items.forEach((item: any) => {
-                        const codigo = (item.codigo || item.codigo_producto || "").toUpperCase();
-                        if (codigo) {
-                          const precioVenta = Number(item.precio_venta || item.precioVenta || item.precio_unitario || item.precio || 0);
-                          if (precioVenta > 0 && (!preciosMap.has(codigo) || preciosMap.get(codigo)! < precioVenta)) {
-                            preciosMap.set(codigo, precioVenta);
-                          } else if (precioVenta === 0) {
-                            // Calcular desde costo + utilidad
-                            const costo = Number(item.precioUnitario || item.precio_unitario || item.costo || item.costo_unitario || 0);
-                            const utilidadPorcentaje = Number(item.utilidad || item.utilidad_contable || item.porcentaje_ganancia || 0);
-                            let utilidadEnDinero = 0;
-                            if (utilidadPorcentaje > 0 && utilidadPorcentaje <= 100) {
-                              utilidadEnDinero = (costo * utilidadPorcentaje) / 100;
-                            } else if (utilidadPorcentaje > 100) {
-                              utilidadEnDinero = utilidadPorcentaje;
-                            }
-                            const precioCalculado = costo + utilidadEnDinero;
-                            if (precioCalculado > 0 && (!preciosMap.has(codigo) || preciosMap.get(codigo)! < precioCalculado)) {
-                              preciosMap.set(codigo, precioCalculado);
-                            }
-                          }
-                        }
-                      });
-                    });
-                    
-                    // Aplicar precios a productos que no tienen precio
-                    productosArray = productosArray.map((producto: any) => {
-                      const codigo = (producto.codigo || producto.codigo_producto || "").toUpperCase();
-                      const precioActual = Number(producto.precio || producto.precio_usd || producto.precio_unitario || producto.precio_venta || 0);
-                      
-                      if (precioActual === 0 && codigo && preciosMap.has(codigo)) {
-                        const precioDesdeCompra = preciosMap.get(codigo)!;
-                        return {
-                          ...producto,
-                          precio: precioDesdeCompra,
-                          precio_usd: precioDesdeCompra,
-                          precio_unitario: precioDesdeCompra,
-                          precio_venta: precioDesdeCompra
-                        };
-                      }
-                      return producto;
-                    });
-                  }
-                }
-              } catch (err) {
-                console.warn("⚠️ [PUNTO_VENTA] No se pudieron cargar precios desde compras:", err);
-              }
-            }
+            // NOTA: Los precios deben venir del backend. 
+            // Si un producto no tiene precio, el backend debe calcularlo desde costo + utilidad.
+            // Eliminamos la búsqueda de precios desde compras para mejorar el rendimiento.
             
             console.log(`✅ [PUNTO_VENTA] Productos encontrados: ${productosArray.length}`);
             if (productosArray.length > 0) {
@@ -452,6 +403,20 @@ const PuntoVentaPage: React.FC = () => {
               console.log(`💰 [PUNTO_VENTA] Precio del primer producto:`, productosArray[0].precio || productosArray[0].precio_usd || productosArray[0].precio_unitario);
             } else {
               console.warn(`⚠️ [PUNTO_VENTA] No se encontraron productos para la búsqueda: "${busqueda}"`);
+            }
+            
+            // Guardar en caché
+            cacheBusquedas.current.set(cacheKey, {
+              productos: productosArray,
+              timestamp: Date.now()
+            });
+            
+            // Limpiar caché antiguo (más de 10 minutos)
+            const ahora = Date.now();
+            for (const [key, value] of cacheBusquedas.current.entries()) {
+              if (ahora - value.timestamp > CACHE_DURATION * 2) {
+                cacheBusquedas.current.delete(key);
+              }
             }
             
             setProductosEncontrados(productosArray);
@@ -574,50 +539,9 @@ const PuntoVentaPage: React.FC = () => {
       const resultados = await Promise.all(promesasItems);
       const productosPlanaos = resultados.flat();
       
-      // Obtener precios desde compras para productos que no tienen precio
-      let preciosDesdeCompras: Map<string, number> = new Map();
-      try {
-        const resCompras = await fetch(`${API_BASE_URL}/compras`, {
-          headers: { "Authorization": `Bearer ${token}` },
-          signal: abortController.signal
-        });
-        
-        if (resCompras.ok && !abortController.signal.aborted) {
-          const comprasData = await resCompras.json();
-          const comprasArray = Array.isArray(comprasData) ? comprasData : [];
-          
-          // Extraer precios de venta de las compras
-          comprasArray.forEach((compra: any) => {
-            const items = compra.items || compra.productos || [];
-            items.forEach((item: any) => {
-              const codigo = (item.codigo || item.codigo_producto || "").toUpperCase();
-              if (codigo) {
-                // Obtener precio de venta de la compra
-                const precioVenta = Number(item.precio_venta || item.precioVenta || item.precio_unitario || item.precio || 0);
-                // Si no hay precio directo, calcular desde costo + utilidad
-                if (precioVenta === 0) {
-                  const costo = Number(item.precioUnitario || item.precio_unitario || item.costo || item.costo_unitario || 0);
-                  const utilidadPorcentaje = Number(item.utilidad || item.utilidad_contable || item.porcentaje_ganancia || 0);
-                  let utilidadEnDinero = 0;
-                  if (utilidadPorcentaje > 0 && utilidadPorcentaje <= 100) {
-                    utilidadEnDinero = (costo * utilidadPorcentaje) / 100;
-                  } else if (utilidadPorcentaje > 100) {
-                    utilidadEnDinero = utilidadPorcentaje;
-                  }
-                  const precioCalculado = costo + utilidadEnDinero;
-                  if (precioCalculado > 0 && (!preciosDesdeCompras.has(codigo) || preciosDesdeCompras.get(codigo)! < precioCalculado)) {
-                    preciosDesdeCompras.set(codigo, precioCalculado);
-                  }
-                } else if (precioVenta > 0 && (!preciosDesdeCompras.has(codigo) || preciosDesdeCompras.get(codigo)! < precioVenta)) {
-                  preciosDesdeCompras.set(codigo, precioVenta);
-                }
-              }
-            });
-          });
-        }
-      } catch (err) {
-        console.warn("⚠️ [PUNTO_VENTA] No se pudieron cargar precios desde compras:", err);
-      }
+      // NOTA: Los precios deben venir del backend directamente.
+      // Eliminamos la búsqueda de precios desde compras para mejorar el rendimiento.
+      // El backend debe calcular los precios desde costo + utilidad si no están definidos.
 
       // Normalizar productos
       const productosNormalizados = productosPlanaos.map((item: any) => {
@@ -625,11 +549,8 @@ const PuntoVentaPage: React.FC = () => {
         const costo = Number(item.costo_unitario || item.costo || 0);
         const precioInventario = Number(item.precio_unitario || item.precio || item.precio_venta || 0);
         
-        // Obtener precio desde compras si no hay precio en inventario
+        // Usar precio del inventario directamente
         let precioFinal = precioInventario;
-        if (precioFinal === 0 && codigo && preciosDesdeCompras.has(codigo)) {
-          precioFinal = preciosDesdeCompras.get(codigo)!;
-        }
         
         // Si aún no hay precio, intentar calcular desde costo y utilidad
         if (precioFinal === 0 && costo > 0) {
