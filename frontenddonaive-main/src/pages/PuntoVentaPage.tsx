@@ -545,7 +545,6 @@ const PuntoVentaPage: React.FC = () => {
 
       // Normalizar productos
       const productosNormalizados = productosPlanaos.map((item: any) => {
-        const codigo = (item.codigo || item.codigo_producto || "").toUpperCase();
         const costo = Number(item.costo_unitario || item.costo || 0);
         const precioInventario = Number(item.precio_unitario || item.precio || item.precio_venta || 0);
         
