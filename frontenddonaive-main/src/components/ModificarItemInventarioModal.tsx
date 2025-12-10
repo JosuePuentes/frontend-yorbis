@@ -18,6 +18,7 @@ interface Producto {
   nombre?: string;
   descripcion?: string;
   marca?: string;
+  marca_producto?: string; // Campo alternativo para marca
   precio?: number;
   precio_unitario?: number; // Campo usado por el backend
   costo?: number;
