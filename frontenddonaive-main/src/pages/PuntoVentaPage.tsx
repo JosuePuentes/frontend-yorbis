@@ -1954,6 +1954,18 @@ const PuntoVentaPage: React.FC = () => {
       setCarrito([]);
       setMetodosPago([]);
       setShowPagoModal(false);
+      
+      // ✅ NUEVO: Actualizar facturas procesadas automáticamente
+      // Si la sección de facturas procesadas está abierta, refrescar la lista
+      if (mostrarFacturasProcesadas) {
+        console.log("🔄 [PUNTO_VENTA] Actualizando facturas procesadas después de confirmar venta...");
+        await obtenerFacturasProcesadas();
+      } else {
+        // Si no está abierta, aún así actualizar en segundo plano para que esté lista cuando se abra
+        obtenerFacturasProcesadas().catch(err => {
+          console.error("Error al actualizar facturas procesadas en segundo plano:", err);
+        });
+      }
     } catch (error: any) {
       console.error("Error al confirmar venta:", error);
       // El error ya fue mostrado en el alert anterior si viene del backend
