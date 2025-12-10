@@ -103,14 +103,21 @@ const ResumeCardFarmacia: React.FC<ResumeCardFarmaciaProps> = ({
         {nombre}
       </h3>
 
-      {/* Total de Ventas Principal - Solo mostrar si hay ventas verificadas */}
-      {totalVentas > 0 && (
-        <div
-          className={`text-4xl font-extrabold mb-2 ${
-            top ? "text-yellow-600" : "text-green-600"
-          } text-center`}
-        >
-          {formatCurrency(totalVentas)}
+      {/* Total de Ventas Principal - Mostrar siempre */}
+      <div
+        className={`text-4xl font-extrabold mb-2 ${
+          totalVentas > 0
+            ? top
+              ? "text-yellow-600"
+              : "text-green-600"
+            : "text-gray-400"
+        } text-center`}
+      >
+        {totalVentas > 0 ? formatCurrency(totalVentas) : "$0.00"}
+      </div>
+      {totalVentas === 0 && (
+        <div className="text-xs text-gray-500 text-center mb-2 italic">
+          Sin ventas en este período
         </div>
       )}
       {/* Total Inventario visual */}

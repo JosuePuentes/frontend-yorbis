@@ -266,12 +266,17 @@ export function useResumenData() {
           headers.Authorization = `Bearer ${token}`;
         }
         const url = `${API_BASE_URL}/punto-venta/ventas/resumen?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
+        console.log(`[RESUMEN] Obteniendo ventas del punto de venta desde: ${url}`);
         const res = await fetch(url, { headers });
         if (res.ok) {
           const data = await res.json();
-          setVentasPuntoVenta(data.ventas_por_sucursal || {});
+          console.log(`[RESUMEN] Datos recibidos del endpoint:`, data);
+          const ventasPorSucursal = data.ventas_por_sucursal || {};
+          console.log(`[RESUMEN] Ventas por sucursal:`, ventasPorSucursal);
+          setVentasPuntoVenta(ventasPorSucursal);
         } else {
-          console.error("Error al obtener ventas del punto de venta");
+          const errorText = await res.text().catch(() => '');
+          console.error(`[RESUMEN] Error al obtener ventas del punto de venta: ${res.status} ${res.statusText}`, errorText);
           setVentasPuntoVenta({});
         }
       } catch (error) {
@@ -355,6 +360,11 @@ export function useResumenData() {
         total_costo_inventario: 0,
         total_ventas: 0,
       };
+      
+      // Debug: Log de datos para esta farmacia
+      if (ventasPV.total_ventas > 0 || ventasPV.total_usd_recibido > 0 || ventasPV.total_bs > 0) {
+        console.log(`[RESUMEN] Ventas PV para ${farm.nombre} (${farm.id}):`, ventasPV);
+      }
 
       // Sumar efectivo USD y zelle USD de las ventas del punto de venta
       efectivoUsd += ventasPV.total_efectivo_usd;
@@ -376,7 +386,7 @@ export function useResumenData() {
         totalGeneralSinRecargas = totalUsd;
       }
 
-      ventasPorFarmacia[farm.id] = {
+      const ventaData = {
         totalVentas: Number(totalGeneral.toFixed(2)),
         totalBs: Number(totalBs.toFixed(2)),
         totalUsd: Number(totalUsd.toFixed(2)),
@@ -389,7 +399,17 @@ export function useResumenData() {
         totalCosto: Number(totalCosto.toFixed(2)),
         desgloseBs: ventasPV.desglose_bs,
       };
+      
+      // Debug: Log de totales calculados
+      if (ventaData.totalVentas > 0 || ventaData.totalBs > 0 || ventaData.totalUsd > 0) {
+        console.log(`[RESUMEN] Totales calculados para ${farm.nombre} (${farm.id}):`, ventaData);
+      }
+      
+      ventasPorFarmacia[farm.id] = ventaData;
     });
+    
+    console.log(`[RESUMEN] Total de farmacias procesadas: ${Object.keys(ventasPorFarmacia).length}`);
+    console.log(`[RESUMEN] Ventas por farmacia:`, ventasPorFarmacia);
     setVentas(ventasPorFarmacia);
   }, [cuadresPorFarmacia, farmacias, fechaInicio, fechaFin, ventasPuntoVenta]);
   useEffect(() => {
