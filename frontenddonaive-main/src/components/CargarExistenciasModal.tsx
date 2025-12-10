@@ -220,8 +220,10 @@ const CargarExistenciasModal: React.FC<CargarExistenciasModalProps> = ({
       const nuevaExistencia = existenciaActual + existencia;
 
       // Actualizar el item del inventario
+      // Usar el nuevo endpoint sin ID de inventario (más simple)
+      const itemId = itemEncontrado._id || itemEncontrado.id;
       const resUpdate = await fetch(
-        `${API_BASE_URL}/inventarios/${inventarioEncontrado._id}/items/${itemEncontrado._id || itemEncontrado.id}`,
+        `${API_BASE_URL}/inventarios/items/${itemId}`,
         {
           method: "PATCH",
           headers: {
