@@ -563,12 +563,20 @@ const PuntoVentaPage: React.FC = () => {
           }
         }
         
+        const marcaNormalizada = item.marca || item.marca_producto || "";
+        
+        // Debug: Log de marca si existe
+        if (marcaNormalizada) {
+          console.log(`🏷️ [PUNTO_VENTA] Producto ${item.codigo || 'sin_codigo'} tiene marca:`, marcaNormalizada);
+        }
+        
         return {
           id: item._id || item.id || `${item.codigo}_${Math.random()}`,
           nombre: item.descripcion || item.nombre || item.descripcion_producto || "",
           codigo: item.codigo || item.codigo_producto || "",
           descripcion: item.descripcion || item.nombre || item.descripcion_producto || "",
-          marca: item.marca || item.marca_producto || "",
+          marca: marcaNormalizada,
+          marca_producto: marcaNormalizada, // Asegurar que ambos campos estén disponibles
           precio: precioFinal,
           precio_usd: precioFinal,
           precio_unitario: precioFinal,
@@ -2656,6 +2664,18 @@ const PuntoVentaPage: React.FC = () => {
                   const codigo = producto.codigo || producto.codigo_producto || "";
                   const descripcion = producto.descripcion || producto.nombre || producto.descripcion_producto || "";
                   const marca = producto.marca || producto.marca_producto || "";
+                  
+                  // Debug: Log si no hay marca pero debería haberla
+                  if (!marca && producto.codigo) {
+                    console.warn(`⚠️ [PUNTO_VENTA] Producto ${producto.codigo} no tiene marca. Datos del producto:`, {
+                      codigo: producto.codigo,
+                      descripcion: producto.descripcion,
+                      tiene_marca: !!producto.marca,
+                      tiene_marca_producto: !!producto.marca_producto,
+                      producto_completo: producto
+                    });
+                  }
+                  
                   const precioVenta = producto.precio_usd || producto.precio || producto.precio_unitario || producto.precio_venta || 0;
                   
                   return (
@@ -2679,13 +2699,19 @@ const PuntoVentaPage: React.FC = () => {
                           )}
                           {/* Descripción */}
                           <div className="font-semibold text-sm text-slate-800 mb-1">{descripcion}</div>
-                          {/* Marca */}
-                          {marca && (
-                            <div className="text-xs font-medium text-slate-700 mb-1">
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
-                                🏷️ {marca}
-                              </span>
+                          {/* Marca - Siempre mostrar si existe */}
+                          {marca ? (
+                            <div className="flex items-center gap-1 text-xs text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full mt-1 mb-1">
+                              <span className="text-slate-500">🏷️</span>
+                              <span className="font-medium">{marca}</span>
                             </div>
+                          ) : (
+                            // Debug: Mostrar indicador si no hay marca (solo en desarrollo)
+                            process.env.NODE_ENV === 'development' && (
+                              <div className="text-xs text-gray-400 italic mb-1">
+                                ⚠️ Sin marca
+                              </div>
+                            )
                           )}
                           {/* Precio de Venta */}
                           <div className="text-sm font-bold text-green-600 mb-1">
