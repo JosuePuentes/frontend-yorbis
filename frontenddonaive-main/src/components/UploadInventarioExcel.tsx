@@ -18,6 +18,7 @@ interface ProductoInventario {
   marca: string;
   existencia: number;
   costo: number;
+  utilidad: number;
   precio: number;
 }
 
@@ -99,6 +100,9 @@ const UploadInventarioExcel: React.FC<UploadInventarioExcelProps> = ({
         const costoIdx = headers.findIndex((h) =>
           ["costo", "cost", "precio_costo", "precio costo"].includes(h)
         );
+        const utilidadIdx = headers.findIndex((h) =>
+          ["utilidad", "utility", "ganancia", "profit", "margen"].includes(h)
+        );
         const precioIdx = headers.findIndex((h) =>
           ["precio", "price", "precio_venta", "precio venta"].includes(h)
         );
@@ -106,18 +110,19 @@ const UploadInventarioExcel: React.FC<UploadInventarioExcelProps> = ({
           ["existencia", "stock", "cantidad", "cant"].includes(h)
         );
 
-        // Validar que existan TODAS las columnas requeridas (ninguna es opcional)
-        if (codigoIdx === -1 || descripcionIdx === -1 || marcaIdx === -1 || costoIdx === -1 || precioIdx === -1 || existenciaIdx === -1) {
+        // Validar que existan las columnas requeridas: codigo, descripcion, marca, costo, utilidad, existencia
+        // PRECIO es opcional (se calculará automáticamente)
+        if (codigoIdx === -1 || descripcionIdx === -1 || marcaIdx === -1 || costoIdx === -1 || utilidadIdx === -1 || existenciaIdx === -1) {
           const faltantes = [];
           if (codigoIdx === -1) faltantes.push("CODIGO");
           if (descripcionIdx === -1) faltantes.push("DESCRIPCION");
           if (marcaIdx === -1) faltantes.push("MARCA");
           if (costoIdx === -1) faltantes.push("COSTO");
-          if (precioIdx === -1) faltantes.push("PRECIO");
+          if (utilidadIdx === -1) faltantes.push("UTILIDAD");
           if (existenciaIdx === -1) faltantes.push("EXISTENCIA");
           
           setError(
-            `El archivo Excel debe contener TODAS las columnas requeridas. Faltan: ${faltantes.join(", ")}. El formato debe ser: CODIGO, DESCRIPCION, MARCA, COSTO, PRECIO, EXISTENCIA`
+            `El archivo Excel debe contener TODAS las columnas requeridas. Faltan: ${faltantes.join(", ")}. El formato debe ser: CODIGO, DESCRIPCION, MARCA, COSTO, UTILIDAD, EXISTENCIA. El precio se calculará automáticamente como: COSTO + UTILIDAD`
           );
           return;
         }
@@ -134,19 +139,25 @@ const UploadInventarioExcel: React.FC<UploadInventarioExcelProps> = ({
           
           // Permitir valores vacíos o 0 para números
           const costo = parseFloat(String(row[costoIdx] || 0)) || 0;
-          const precio = parseFloat(String(row[precioIdx] || 0)) || 0;
+          const utilidad = parseFloat(String(row[utilidadIdx] || 0)) || 0;
+          // Precio puede venir del Excel o calcularse automáticamente
+          const precioExcel = precioIdx !== -1 ? (parseFloat(String(row[precioIdx] || 0)) || 0) : 0;
           const existencia = parseFloat(String(row[existenciaIdx] || 0)) || 0;
 
           // Permitir campos vacíos - guardar todo lo que esté en la fila
           // Solo saltar si la fila está completamente vacía
-          if (codigo === "" && descripcion === "" && marca === "" && costo === 0 && precio === 0 && existencia === 0) {
+          if (codigo === "" && descripcion === "" && marca === "" && costo === 0 && utilidad === 0 && existencia === 0) {
             continue;
           }
 
           // Permitir valores NaN - convertirlos a 0 o string vacío según corresponda
           const costoFinal = isNaN(costo) ? 0 : costo;
-          const precioFinal = isNaN(precio) ? 0 : precio;
+          const utilidadFinal = isNaN(utilidad) ? 0 : utilidad;
           const existenciaFinal = isNaN(existencia) ? 0 : existencia;
+          
+          // Calcular precio: COSTO + UTILIDAD = PRECIO
+          // Si viene precio del Excel, usarlo; si no, calcularlo
+          const precioFinal = precioExcel > 0 ? precioExcel : (costoFinal + utilidadFinal);
 
           productosParsed.push({
             codigo: codigo || "", // Permitir código vacío
@@ -154,7 +165,8 @@ const UploadInventarioExcel: React.FC<UploadInventarioExcelProps> = ({
             marca: marca || "", // Permitir marca vacía
             existencia: existenciaFinal,
             costo: costoFinal,
-            precio: precioFinal,
+            utilidad: utilidadFinal,
+            precio: precioFinal, // Precio calculado: costo + utilidad
           });
         }
 
@@ -196,13 +208,14 @@ const UploadInventarioExcel: React.FC<UploadInventarioExcelProps> = ({
       }
 
       // Transformar productos para que coincidan con lo que espera el backend
-      // El backend espera: nombre (en lugar de descripcion) y stock (en lugar de existencia)
+      // El backend espera: nombre (en lugar de descripcion), stock (en lugar de existencia), y utilidad
       const productosTransformados = productos.map((p) => ({
         codigo: p.codigo || "",
         nombre: p.descripcion || "",
         marca: p.marca || "",
         costo: p.costo || 0,
-        precio: p.precio || 0,
+        utilidad: p.utilidad || 0,
+        precio: p.precio || 0, // Precio calculado: costo + utilidad
         stock: p.existencia || 0,
       }));
 
@@ -344,7 +357,9 @@ const UploadInventarioExcel: React.FC<UploadInventarioExcelProps> = ({
               />
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              <strong>Formato requerido:</strong> CODIGO, DESCRIPCION, MARCA, COSTO, PRECIO, EXISTENCIA
+              <strong>Formato requerido:</strong> CODIGO, DESCRIPCION, MARCA, COSTO, UTILIDAD, EXISTENCIA
+              <br />
+              <span className="text-blue-600">El precio se calculará automáticamente: COSTO + UTILIDAD = PRECIO</span>
               <br />
               <span className="text-red-600">Todas las columnas son obligatorias</span>
             </p>
@@ -367,13 +382,14 @@ const UploadInventarioExcel: React.FC<UploadInventarioExcelProps> = ({
                     
                     // Preparar datos para Excel
                     const data = [
-                      ["CODIGO", "DESCRIPCION", "MARCA", "COSTO", "PRECIO", "EXISTENCIA"],
+                      ["CODIGO", "DESCRIPCION", "MARCA", "COSTO", "UTILIDAD", "PRECIO (Calculado)", "EXISTENCIA"],
                       ...productos.map(p => [
                         p.codigo || "",
                         p.descripcion || "",
                         p.marca || "",
                         p.costo || 0,
-                        p.precio || 0,
+                        p.utilidad || 0,
+                        p.precio || 0, // Precio calculado
                         p.existencia || 0
                       ])
                     ];
@@ -407,6 +423,7 @@ const UploadInventarioExcel: React.FC<UploadInventarioExcelProps> = ({
                     <th className="text-left p-2 font-semibold">Descripción</th>
                     <th className="text-left p-2 font-semibold">Marca</th>
                     <th className="text-right p-2 font-semibold">Costo</th>
+                    <th className="text-right p-2 font-semibold">Utilidad</th>
                     <th className="text-right p-2 font-semibold">Precio</th>
                     <th className="text-right p-2 font-semibold">Existencia</th>
                   </tr>
@@ -417,8 +434,9 @@ const UploadInventarioExcel: React.FC<UploadInventarioExcelProps> = ({
                       <td className="p-2">{p.codigo || <span className="text-gray-400 italic">(vacío)</span>}</td>
                       <td className="p-2">{p.descripcion || <span className="text-gray-400 italic">(vacío)</span>}</td>
                       <td className="p-2">{p.marca || <span className="text-gray-400 italic">(vacío)</span>}</td>
-                      <td className="text-right p-2">{p.costo.toFixed(2)}</td>
-                      <td className="text-right p-2">{p.precio.toFixed(2)}</td>
+                      <td className="text-right p-2">${p.costo.toFixed(2)}</td>
+                      <td className="text-right p-2 text-green-600">${p.utilidad.toFixed(2)}</td>
+                      <td className="text-right p-2 font-semibold text-blue-600">${p.precio.toFixed(2)}</td>
                       <td className="text-right p-2">{p.existencia}</td>
                     </tr>
                   ))}

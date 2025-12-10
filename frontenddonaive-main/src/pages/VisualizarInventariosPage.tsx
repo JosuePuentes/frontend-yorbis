@@ -2,9 +2,10 @@ import React, { useEffect, useState, useMemo } from "react";
 import UploadInventarioExcel from "../components/UploadInventarioExcel";
 import ModificarItemInventarioModal from "../components/ModificarItemInventarioModal";
 import VerItemsInventarioModal from "../components/VerItemsInventarioModal";
+import CargarExistenciasModal from "../components/CargarExistenciasModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Download, Trash2, Edit, Eye, Search } from "lucide-react";
+import { Download, Trash2, Edit, Eye, Search, Plus } from "lucide-react";
 
 interface Inventario {
   _id: string;
@@ -50,6 +51,8 @@ const VisualizarInventariosPage: React.FC = () => {
   const [productoAEliminar, setProductoAEliminar] = useState<any | null>(null);
   const [showEliminarProductoModal, setShowEliminarProductoModal] = useState(false);
   const [eliminandoProducto, setEliminandoProducto] = useState(false);
+  const [showCargarExistenciasModal, setShowCargarExistenciasModal] = useState(false);
+  const [sucursalSeleccionadaParaCargar, setSucursalSeleccionadaParaCargar] = useState<string>("");
 
   const fetchInventarios = async (): Promise<Inventario[]> => {
     setLoading(true);
@@ -745,17 +748,34 @@ const VisualizarInventariosPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Buscador */}
+            {/* Buscador y Botón de Cargar Existencias */}
             <div className="p-4 border-b bg-slate-50">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
-                <Input
-                  type="text"
-                  placeholder="Buscar por código o descripción..."
-                  value={busquedaProducto}
-                  onChange={(e) => setBusquedaProducto(e.target.value)}
-                  className="pl-10 w-full"
-                />
+              <div className="flex gap-2 mb-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
+                  <Input
+                    type="text"
+                    placeholder="Buscar por código o descripción..."
+                    value={busquedaProducto}
+                    onChange={(e) => setBusquedaProducto(e.target.value)}
+                    className="pl-10 w-full"
+                  />
+                </div>
+                <Button
+                  onClick={() => {
+                    // Obtener la primera sucursal disponible o permitir selección
+                    if (farmacias.length > 0) {
+                      setSucursalSeleccionadaParaCargar(farmacias[0].id);
+                      setShowCargarExistenciasModal(true);
+                    } else {
+                      alert("No hay sucursales disponibles");
+                    }
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Cargar Existencias
+                </Button>
               </div>
               <div className="mt-2 text-sm text-slate-600">
                 Mostrando {productosFiltrados.length} de {todosLosProductos.length} productos
@@ -1188,6 +1208,22 @@ const VisualizarInventariosPage: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Modal de Cargar Existencias */}
+        {showCargarExistenciasModal && sucursalSeleccionadaParaCargar && (
+          <CargarExistenciasModal
+            open={showCargarExistenciasModal}
+            onClose={() => {
+              setShowCargarExistenciasModal(false);
+              setSucursalSeleccionadaParaCargar("");
+            }}
+            sucursalId={sucursalSeleccionadaParaCargar}
+            onSuccess={() => {
+              // Refrescar productos después de cargar existencia
+              cargarTodosLosProductos();
+            }}
+          />
         )}
       </div>
     </div>
