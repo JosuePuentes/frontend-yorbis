@@ -2681,7 +2681,11 @@ const PuntoVentaPage: React.FC = () => {
                           <div className="font-semibold text-sm text-slate-800 mb-1">{descripcion}</div>
                           {/* Marca */}
                           {marca && (
-                            <div className="text-xs text-slate-600 mb-1">Marca: {marca}</div>
+                            <div className="text-xs font-medium text-slate-700 mb-1">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                                🏷️ {marca}
+                              </span>
+                            </div>
                           )}
                           {/* Precio de Venta */}
                           <div className="text-sm font-bold text-green-600 mb-1">
