@@ -819,7 +819,11 @@ const VisualizarInventariosPage: React.FC = () => {
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-slate-900">{producto.codigo || "-"}</td>
                           <td className="px-4 py-3 text-sm text-slate-700">{producto.descripcion || "-"}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600">{producto.marca || "-"}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">
+                            {producto.marca || producto.marca_producto || (
+                              <span className="text-slate-400 italic">Sin marca</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-sm text-right text-slate-700">
                             ${costo.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>

@@ -490,7 +490,11 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
                       >
                         <td className="px-3 py-2">{producto.codigo}</td>
                         <td className="px-3 py-2">{producto.descripcion || producto.nombre}</td>
-                        <td className="px-3 py-2">{producto.marca || "-"}</td>
+                        <td className="px-3 py-2">
+                          {producto.marca || producto.marca_producto || (
+                            <span className="text-slate-400 italic">Sin marca</span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-right">
                           {producto.precio?.toLocaleString("es-VE", {
                             minimumFractionDigits: 2,
