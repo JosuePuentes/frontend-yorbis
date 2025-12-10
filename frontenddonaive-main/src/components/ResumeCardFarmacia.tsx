@@ -201,23 +201,37 @@ const ResumeCardFarmacia: React.FC<ResumeCardFarmaciaProps> = ({
               {formatCurrency(gastos)}
             </span>
           </div>
-          <div className="flex justify-between items-center py-1 border-b border-gray-100">
-            <span className="flex items-center gap-2">
-              <i className="fas fa-hand-holding-usd text-orange-600"></i>{" "}
-              Cuentas por Pagar:
-            </span>
-            <span className="font-semibold text-orange-600">
-              {formatCurrency(cuentasPorPagarActivas)}
-            </span>
+          
+          {/* Sección: Cuentas por Pagar - Separada visualmente */}
+          <div className="mt-3 pt-3 border-t-2 border-orange-200">
+            <div className="flex justify-between items-center py-2 bg-orange-50 rounded-lg px-3 mb-2">
+              <span className="flex items-center gap-2 font-bold text-orange-800">
+                <i className="fas fa-hand-holding-usd text-orange-600"></i>
+                Cuentas por Pagar (Activas):
+              </span>
+              <span className="font-extrabold text-lg text-orange-700">
+                {formatCurrency(cuentasPorPagarActivas)}
+              </span>
+            </div>
+            <div className="text-xs text-orange-600 italic px-3">
+              Deudas pendientes de pago
+            </div>
           </div>
-          <div className="flex justify-between items-center py-1 border-b border-gray-100">
-            <span className="flex items-center gap-2">
-              <i className="fas fa-check-circle text-green-600"></i> Monto
-              Facturas Pagadas:
-            </span>
-            <span className="font-semibold text-green-700">
-              {formatCurrency(cuentasPagadas)}
-            </span>
+
+          {/* Sección: Cuentas Pagadas - Separada visualmente */}
+          <div className="mt-3 pt-3 border-t-2 border-green-200">
+            <div className="flex justify-between items-center py-2 bg-green-50 rounded-lg px-3 mb-2">
+              <span className="flex items-center gap-2 font-bold text-green-800">
+                <i className="fas fa-check-circle text-green-600"></i>
+                Cuentas Pagadas (Monto Facturado):
+              </span>
+              <span className="font-extrabold text-lg text-green-700">
+                {formatCurrency(cuentasPagadas)}
+              </span>
+            </div>
+            <div className="text-xs text-green-600 italic px-3">
+              Facturas pagadas en el período
+            </div>
           </div>
           <div className="mt-2 pt-2 border-t border-dashed">
             <p className="font-bold text-center text-blue-800 mb-2">
