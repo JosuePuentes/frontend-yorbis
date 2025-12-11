@@ -192,47 +192,129 @@ const ResumeCardFarmacia: React.FC<ResumeCardFarmaciaProps> = ({
         </div>
 
         <>
-          <div className="flex justify-between items-center py-1 border-b border-gray-100">
-            <span className="flex items-center gap-2">
-              <i className="fas fa-minus-circle text-red-600"></i> Gastos
-              Verificados:
+        <div className="flex justify-between items-center py-1 border-b border-gray-100">
+          <span className="flex items-center gap-2">
+            <i className="fas fa-minus-circle text-red-600"></i> Gastos
+            Verificados:
+          </span>
+          <span className="font-semibold text-red-600">
+            {formatCurrency(gastos)}
+          </span>
+        </div>
+        
+        {/* Sección: Inventario - SIEMPRE VISIBLE */}
+        <div className="mt-3 pt-3 border-t-2 border-purple-200">
+          <div className={`flex justify-between items-center py-2 rounded-lg px-3 mb-2 ${
+            totalInventario > 0 ? 'bg-purple-50' : 'bg-gray-50'
+          }`}>
+            <span className={`flex items-center gap-2 font-bold ${
+              totalInventario > 0 ? 'text-purple-800' : 'text-gray-600'
+            }`}>
+              <i className={`fas fa-boxes ${
+                totalInventario > 0 ? 'text-purple-600' : 'text-gray-400'
+              }`}></i>
+              Inventario Costo Venta:
             </span>
-            <span className="font-semibold text-red-600">
-              {formatCurrency(gastos)}
+            <span className={`font-extrabold text-lg ${
+              totalInventario > 0 ? 'text-purple-700' : 'text-gray-500'
+            }`}>
+              {formatCurrency(totalInventario)}
             </span>
           </div>
-          
-          {/* Sección: Cuentas por Pagar - Separada visualmente */}
+          <div className={`text-xs italic px-3 ${
+            totalInventario > 0 ? 'text-purple-600' : 'text-gray-500'
+          }`}>
+            {totalInventario > 0 
+              ? 'Costo total del inventario (cantidad × costo unitario)' 
+              : 'No hay inventario registrado'}
+          </div>
+        </div>
+        
+        {/* Sección: Cuentas por Pagar - Separada visualmente - SIEMPRE VISIBLE */}
           <div className="mt-3 pt-3 border-t-2 border-orange-200">
-            <div className="flex justify-between items-center py-2 bg-orange-50 rounded-lg px-3 mb-2">
-              <span className="flex items-center gap-2 font-bold text-orange-800">
-                <i className="fas fa-hand-holding-usd text-orange-600"></i>
+            <div className={`flex justify-between items-center py-2 rounded-lg px-3 mb-2 ${
+              cuentasPorPagarActivas > 0 ? 'bg-orange-50' : 'bg-gray-50'
+            }`}>
+              <span className={`flex items-center gap-2 font-bold ${
+                cuentasPorPagarActivas > 0 ? 'text-orange-800' : 'text-gray-600'
+              }`}>
+                <i className={`fas fa-hand-holding-usd ${
+                  cuentasPorPagarActivas > 0 ? 'text-orange-600' : 'text-gray-400'
+                }`}></i>
                 Cuentas por Pagar (Activas):
               </span>
-              <span className="font-extrabold text-lg text-orange-700">
+              <span className={`font-extrabold text-lg ${
+                cuentasPorPagarActivas > 0 ? 'text-orange-700' : 'text-gray-500'
+              }`}>
                 {formatCurrency(cuentasPorPagarActivas)}
               </span>
             </div>
-            <div className="text-xs text-orange-600 italic px-3">
-              Deudas pendientes de pago
+            <div className={`text-xs italic px-3 ${
+              cuentasPorPagarActivas > 0 ? 'text-orange-600' : 'text-gray-500'
+            }`}>
+              {cuentasPorPagarActivas > 0 
+                ? 'Deudas pendientes de pago' 
+                : 'No hay cuentas por pagar activas'}
             </div>
           </div>
 
-          {/* Sección: Cuentas Pagadas - Separada visualmente */}
+          {/* Sección: Cuentas Pagadas - Separada visualmente - SIEMPRE VISIBLE */}
           <div className="mt-3 pt-3 border-t-2 border-green-200">
-            <div className="flex justify-between items-center py-2 bg-green-50 rounded-lg px-3 mb-2">
-              <span className="flex items-center gap-2 font-bold text-green-800">
-                <i className="fas fa-check-circle text-green-600"></i>
+            <div className={`flex justify-between items-center py-2 rounded-lg px-3 mb-2 ${
+              cuentasPagadas > 0 ? 'bg-green-50' : 'bg-gray-50'
+            }`}>
+              <span className={`flex items-center gap-2 font-bold ${
+                cuentasPagadas > 0 ? 'text-green-800' : 'text-gray-600'
+              }`}>
+                <i className={`fas fa-check-circle ${
+                  cuentasPagadas > 0 ? 'text-green-600' : 'text-gray-400'
+                }`}></i>
                 Cuentas Pagadas (Monto Facturado):
               </span>
-              <span className="font-extrabold text-lg text-green-700">
+              <span className={`font-extrabold text-lg ${
+                cuentasPagadas > 0 ? 'text-green-700' : 'text-gray-500'
+              }`}>
                 {formatCurrency(cuentasPagadas)}
               </span>
             </div>
-            <div className="text-xs text-green-600 italic px-3">
-              Facturas pagadas en el período
+            <div className={`text-xs italic px-3 ${
+              cuentasPagadas > 0 ? 'text-green-600' : 'text-gray-500'
+            }`}>
+              {cuentasPagadas > 0 
+                ? 'Facturas pagadas en el período (incluye abonos)' 
+                : 'No hay facturas pagadas en el período'}
             </div>
           </div>
+          
+          {/* Sección: Abonos No Liquidados - SIEMPRE VISIBLE */}
+          {(abonosNoLiquidadosEnUsd > 0 || abonosNoLiquidadosEnBs > 0) && (
+            <div className="mt-3 pt-3 border-t-2 border-yellow-200">
+              <div className="flex justify-between items-center py-2 bg-yellow-50 rounded-lg px-3 mb-2">
+                <span className="flex items-center gap-2 font-bold text-yellow-800">
+                  <i className="fas fa-hourglass-half text-yellow-600"></i>
+                  Abonos No Liquidados:
+                </span>
+                <div className="flex flex-col items-end">
+                  {abonosNoLiquidadosEnUsd > 0 && (
+                    <span className="font-extrabold text-lg text-yellow-700">
+                      {formatCurrency(abonosNoLiquidadosEnUsd)} USD
+                    </span>
+                  )}
+                  {abonosNoLiquidadosEnBs > 0 && (
+                    <span className="font-extrabold text-sm text-yellow-700">
+                      {abonosNoLiquidadosEnBs.toLocaleString("es-VE", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })} Bs
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="text-xs text-yellow-600 italic px-3">
+                Pagos parciales pendientes de liquidación
+              </div>
+            </div>
+          )}
           <div className="mt-2 pt-2 border-t border-dashed">
             <p className="font-bold text-center text-blue-800 mb-2">
               Análisis de Pagos del Período

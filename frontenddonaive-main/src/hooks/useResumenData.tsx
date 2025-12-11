@@ -80,6 +80,19 @@ interface CuentaPorPagar {
   montoUsd: number;
 }
 
+interface Compra {
+  _id?: string;
+  sucursal_id?: string;
+  farmacia?: string;
+  monto_restante?: number;
+  monto_abonado?: number;
+  total_precio_venta?: number;
+  total?: number;
+  estado?: string;
+  fecha?: string;
+  fecha_compra?: string;
+}
+
 export function useResumenData() {
   const [pagos, setPagos] = useState<PagoCPP[]>([]); // <-- NUEVO ESTADO PARA PAGOS
   const [farmacias, setFarmacias] = useState<{ id: string; nombre: string }[]>(
@@ -101,6 +114,7 @@ export function useResumenData() {
   }>({});
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [cuentasPorPagar, setCuentasPorPagar] = useState<CuentaPorPagar[]>([]);
+  const [compras, setCompras] = useState<Compra[]>([]); // ✅ NUEVO: Para calcular cuentas por pagar desde compras
   const [ventasPuntoVenta, setVentasPuntoVenta] = useState<{
     [key: string]: {
       total_efectivo_usd: number;
@@ -220,19 +234,61 @@ export function useResumenData() {
         });
         setCuadresPorFarmacia(resultCuadres);
 
+        // ✅ MEJORADO: Calcular costo del inventario desde los items (cantidad × costo_unitario)
         let inventariosPorFarmacia: { [key: string]: number } = {};
         const resInventarios = await fetch(`${API_BASE_URL}/inventarios`, {
           headers,
         });
         if (resInventarios.ok) {
           const dataInventarios: InventarioItem[] = await resInventarios.json();
-          dataInventarios.forEach((inv) => {
-            if (!inv.farmacia) return;
-            if (!inventariosPorFarmacia[inv.farmacia])
-              inventariosPorFarmacia[inv.farmacia] = 0;
-            inventariosPorFarmacia[inv.farmacia] += Number(inv.costo || 0);
+          
+          // Filtrar solo inventarios activos
+          const inventariosActivos = dataInventarios.filter((inv) => inv.farmacia && inv.estado === "activo");
+          
+          // Para cada inventario, obtener sus items y calcular el costo total
+          const promesasInventarios = inventariosActivos.map(async (inv) => {
+            try {
+              // Obtener items del inventario
+              const resItems = await fetch(`${API_BASE_URL}/inventarios/${inv._id || inv.id}/items`, {
+                headers,
+              });
+              
+              if (resItems.ok) {
+                const items = await resItems.json();
+                if (Array.isArray(items)) {
+                  // Calcular costo total: suma de (cantidad × costo_unitario)
+                  const costoTotal = items.reduce((sum: number, item: any) => {
+                    const cantidad = Number(item.cantidad || item.existencia || 0);
+                    const costo = Number(item.costo_unitario || item.costo || 0);
+                    return sum + (cantidad * costo);
+                  }, 0);
+                  
+                  console.log(`[RESUMEN] Inventario ${inv._id || inv.id} (${inv.farmacia}): ${items.length} items, Costo total: $${costoTotal.toFixed(2)}`);
+                  
+                  return {
+                    farmacia: inv.farmacia!,
+                    costoTotal: costoTotal
+                  };
+                }
+              }
+            } catch (err) {
+              console.error(`[RESUMEN] Error al obtener items del inventario ${inv._id || inv.id}:`, err);
+            }
+            return null;
+          });
+          
+          // Esperar todas las promesas y sumar los costos por farmacia
+          const resultados = await Promise.all(promesasInventarios);
+          resultados.forEach((resultado) => {
+            if (resultado) {
+              if (!inventariosPorFarmacia[resultado.farmacia]) {
+                inventariosPorFarmacia[resultado.farmacia] = 0;
+              }
+              inventariosPorFarmacia[resultado.farmacia] += resultado.costoTotal;
+            }
           });
         }
+        console.log(`[RESUMEN] Costo total de inventarios por farmacia:`, inventariosPorFarmacia);
         setInventariosFarmacia(inventariosPorFarmacia);
 
         const resGastos = await fetch(`${API_BASE_URL}/gastos`, { headers });
@@ -241,7 +297,28 @@ export function useResumenData() {
         const resCuentas = await fetch(`${API_BASE_URL}/cuentas-por-pagar`, {
           headers,
         });
-        if (resCuentas.ok) setCuentasPorPagar(await resCuentas.json());
+        if (resCuentas.ok) {
+          const dataCuentas = await resCuentas.json();
+          console.log(`[RESUMEN] Cuentas por pagar obtenidas:`, dataCuentas);
+          console.log(`[RESUMEN] Total de cuentas:`, dataCuentas.length);
+          setCuentasPorPagar(dataCuentas);
+        } else {
+          console.error(`[RESUMEN] Error al obtener cuentas por pagar: ${resCuentas.status}`);
+        }
+
+        // ✅ NUEVO: Obtener compras para calcular cuentas por pagar y pagadas
+        const resCompras = await fetch(`${API_BASE_URL}/compras`, {
+          headers,
+        });
+        if (resCompras.ok) {
+          const dataCompras = await resCompras.json();
+          const comprasArray = Array.isArray(dataCompras) ? dataCompras : [];
+          console.log(`[RESUMEN] Compras obtenidas:`, comprasArray.length);
+          setCompras(comprasArray);
+        } else {
+          console.error(`[RESUMEN] Error al obtener compras: ${resCompras.status}`);
+          setCompras([]);
+        }
       } catch (err: any) {
         setError(err.message || "Error desconocido al cargar datos iniciales.");
       } finally {
@@ -635,31 +712,112 @@ export function useResumenData() {
   const cuentasActivasPorFarmacia = useMemo(() => {
     const resultado: { [key: string]: number } = {};
     farmacias.forEach((farm) => {
-      const total = cuentasPorPagar
-        .filter((c) => c.farmacia === farm.id && c.estatus === "activa")
-        .reduce((acc, c) => acc + Number(c.montoUsd || 0), 0);
+      // ✅ MEJORADO: Calcular desde compras (monto_restante = total adeudado)
+      const comprasDeLaFarmacia = compras.filter((c) => {
+        const farmaciaId = c.sucursal_id || c.farmacia || "";
+        return farmaciaId === farm.id;
+      });
+      
+      // Total adeudado = suma de monto_restante de todas las compras
+      const totalAdeudado = comprasDeLaFarmacia.reduce((acc, compra) => {
+        const montoRestante = compra.monto_restante || 0;
+        return acc + Number(montoRestante);
+      }, 0);
+      
+      // También sumar cuentas por pagar tradicionales (por compatibilidad)
+      const cuentasActivas = cuentasPorPagar.filter(
+        (c) => c.farmacia === farm.id && c.estatus === "activa"
+      );
+      const totalCuentasTradicionales = cuentasActivas.reduce((acc, c) => acc + Number(c.montoUsd || 0), 0);
+      
+      const total = totalAdeudado + totalCuentasTradicionales;
       resultado[farm.id] = Math.max(0, total);
+      
+      // Debug: Log de cuentas activas por farmacia
+      if (comprasDeLaFarmacia.length > 0 || cuentasActivas.length > 0 || total > 0) {
+        console.log(`[RESUMEN] Cuentas por pagar para ${farm.nombre} (${farm.id}):`, {
+          compras: comprasDeLaFarmacia.length,
+          totalAdeudado: totalAdeudado,
+          cuentasTradicionales: cuentasActivas.length,
+          totalCuentasTradicionales: totalCuentasTradicionales,
+          total: total
+        });
+      }
     });
+    console.log(`[RESUMEN] Total cuentas por pagar por farmacia:`, resultado);
     return resultado;
-  }, [cuentasPorPagar, farmacias]);
+  }, [compras, cuentasPorPagar, farmacias]);
 
   const MontoFacturadoCuentasPagadasPorFarmacia = useMemo(() => {
     const resultado: { [key: string]: number } = {};
     farmacias.forEach((farm) => {
-      const total = cuentasPorPagar
-        .filter(
-          (c) =>
-            c.farmacia === farm.id &&
-            c.estatus === "pagada" &&
-            (!fechaInicio ||
-              new Date(c.fechaEmision) >= new Date(fechaInicio)) &&
-            (!fechaFin || new Date(c.fechaEmision) <= new Date(fechaFin))
-        )
-        .reduce((acc, c) => acc + Number(c.montoUsd || 0), 0);
+      // ✅ MEJORADO: Calcular desde compras (monto_abonado = total abonado)
+      const comprasDeLaFarmacia = compras.filter((c) => {
+        const farmaciaId = c.sucursal_id || c.farmacia || "";
+        const fechaCompra = c.fecha || c.fecha_compra || "";
+        const dentroRango = !fechaInicio || !fechaFin || 
+          (fechaCompra >= fechaInicio && fechaCompra <= fechaFin);
+        return farmaciaId === farm.id && dentroRango;
+      });
+      
+      // Total abonado = suma de monto_abonado de compras pagadas o con abonos
+      const totalAbonado = comprasDeLaFarmacia.reduce((acc, compra) => {
+        const montoAbonado = compra.monto_abonado || 0;
+        // Solo incluir si la compra está pagada o tiene abonos
+        if (compra.estado === "pagada" || montoAbonado > 0) {
+          return acc + Number(montoAbonado);
+        }
+        return acc;
+      }, 0);
+      
+      // También sumar cuentas por pagar tradicionales con estatus "pagada"
+      const cuentasPagadas = cuentasPorPagar.filter(
+        (c) =>
+          c.farmacia === farm.id &&
+          c.estatus === "pagada" &&
+          (!fechaInicio ||
+            new Date(c.fechaEmision) >= new Date(fechaInicio)) &&
+          (!fechaFin || new Date(c.fechaEmision) <= new Date(fechaFin))
+      );
+      const totalCuentasTradicionales = cuentasPagadas.reduce((acc, c) => acc + Number(c.montoUsd || 0), 0);
+      
+      // Sumar abonos adicionales (pagos con estado "abonada")
+      const pagosDeLaFarmacia = pagos.filter((p) => p.farmaciaId === farm.id);
+      let totalAbonosUsd = 0;
+      
+      pagosDeLaFarmacia.forEach((pago) => {
+        const fechaPago = pago.fechaRegistro || pago.fecha || '';
+        const dentroRango = !fechaInicio || !fechaFin || 
+          (fechaPago >= fechaInicio && fechaPago <= fechaFin);
+        
+        if (pago.estado === "abonada" && dentroRango) {
+          const montoAbono = Number(pago.montoDePago || 0);
+          if (pago.monedaDePago === "USD") {
+            totalAbonosUsd += montoAbono;
+          } else if (pago.monedaDePago === "Bs" && pago.tasaDePago) {
+            totalAbonosUsd += montoAbono / Number(pago.tasaDePago);
+          }
+        }
+      });
+      
+      const total = totalAbonado + totalCuentasTradicionales + totalAbonosUsd;
       resultado[farm.id] = Math.max(0, total);
+      
+      // Debug: Log de cuentas pagadas por farmacia
+      if (comprasDeLaFarmacia.length > 0 || cuentasPagadas.length > 0 || totalAbonosUsd > 0 || total > 0) {
+        console.log(`[RESUMEN] Cuentas pagadas para ${farm.nombre} (${farm.id}):`, {
+          compras: comprasDeLaFarmacia.length,
+          totalAbonado: totalAbonado,
+          cuentasTradicionales: cuentasPagadas.length,
+          totalCuentasTradicionales: totalCuentasTradicionales,
+          abonos: totalAbonosUsd,
+          total: total
+        });
+      }
     });
+    console.log(`[RESUMEN] Total cuentas pagadas por farmacia:`, resultado);
     return resultado;
-  }, [cuentasPorPagar, farmacias, fechaInicio, fechaFin]);
+  }, [compras, cuentasPorPagar, farmacias, fechaInicio, fechaFin, pagos]);
 
   const totalPagosPorFarmacia = useMemo(() => {
     const resultado: {
