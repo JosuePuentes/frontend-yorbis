@@ -11,6 +11,8 @@ interface PagoCPP {
   cuentaPorPagarId?: string;
   estatus?: string; // "activo", "inactivo", etc.
   tasaDePago?: number; // Tasa al momento del pago
+  fechaRegistro?: string; // Fecha de registro del pago
+  fecha?: string; // Fecha alternativa del pago
 
   // Agrega otros campos que necesites del pago
 }
@@ -60,8 +62,11 @@ interface Cuadre {
 }
 
 interface InventarioItem {
+  _id?: string;
+  id?: string;
   farmacia: string;
   costo?: number | string;
+  estado?: "activo" | "inactivo" | string;
 }
 
 interface Gasto {
