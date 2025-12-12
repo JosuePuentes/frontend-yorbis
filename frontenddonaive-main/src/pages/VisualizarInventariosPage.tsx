@@ -3,9 +3,10 @@ import UploadInventarioExcel from "../components/UploadInventarioExcel";
 import ModificarItemInventarioModal from "../components/ModificarItemInventarioModal";
 import VerItemsInventarioModal from "../components/VerItemsInventarioModal";
 import CargarExistenciasModal from "../components/CargarExistenciasModal";
+import CargarExistenciasMasivaModal from "../components/CargarExistenciasMasivaModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Download, Trash2, Edit, Eye, Search, Plus } from "lucide-react";
+import { Download, Trash2, Edit, Eye, Search, Plus, Package } from "lucide-react";
 
 interface Inventario {
   _id: string;
@@ -53,6 +54,8 @@ const VisualizarInventariosPage: React.FC = () => {
   const [eliminandoProducto, setEliminandoProducto] = useState(false);
   const [showCargarExistenciasModal, setShowCargarExistenciasModal] = useState(false);
   const [sucursalSeleccionadaParaCargar, setSucursalSeleccionadaParaCargar] = useState<string>("");
+  const [showCargarExistenciasMasivaModal, setShowCargarExistenciasMasivaModal] = useState(false);
+  const [sucursalSeleccionadaParaCargarMasiva, setSucursalSeleccionadaParaCargarMasiva] = useState<string>("");
 
   const fetchInventarios = async (): Promise<Inventario[]> => {
     setLoading(true);
@@ -772,9 +775,25 @@ const VisualizarInventariosPage: React.FC = () => {
                     }
                   }}
                   className="flex items-center gap-2"
+                  variant="outline"
                 >
                   <Plus className="w-4 h-4" />
                   Cargar Existencias
+                </Button>
+                <Button
+                  onClick={() => {
+                    // Obtener la primera sucursal disponible o permitir selección
+                    if (farmacias.length > 0) {
+                      setSucursalSeleccionadaParaCargarMasiva(farmacias[0].id);
+                      setShowCargarExistenciasMasivaModal(true);
+                    } else {
+                      alert("No hay sucursales disponibles");
+                    }
+                  }}
+                  className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  <Package className="w-4 h-4" />
+                  Carga Masiva
                 </Button>
               </div>
               <div className="mt-2 text-sm text-slate-600">
@@ -1221,6 +1240,22 @@ const VisualizarInventariosPage: React.FC = () => {
             sucursalId={sucursalSeleccionadaParaCargar}
             onSuccess={() => {
               // Refrescar productos después de cargar existencia
+              cargarTodosLosProductos();
+            }}
+          />
+        )}
+
+        {/* Modal de Carga Masiva de Existencias */}
+        {showCargarExistenciasMasivaModal && sucursalSeleccionadaParaCargarMasiva && (
+          <CargarExistenciasMasivaModal
+            open={showCargarExistenciasMasivaModal}
+            onClose={() => {
+              setShowCargarExistenciasMasivaModal(false);
+              setSucursalSeleccionadaParaCargarMasiva("");
+            }}
+            sucursalId={sucursalSeleccionadaParaCargarMasiva}
+            onSuccess={() => {
+              // Refrescar productos después de carga masiva
               cargarTodosLosProductos();
             }}
           />
