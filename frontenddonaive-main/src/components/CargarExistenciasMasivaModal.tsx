@@ -85,10 +85,10 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
           return;
         }
 
-        // ✅ OPTIMIZACIÓN 1: Intentar usar endpoint optimizado primero
+        // ✅ OPTIMIZACIÓN 1: Usar endpoint ultra optimizado /inventarios/buscar
         try {
           const resOptimizado = await fetch(
-            `${API_BASE_URL}/punto-venta/productos/buscar?q=${encodeURIComponent(busqueda)}&sucursal=${sucursalId}`,
+            `${API_BASE_URL}/inventarios/buscar?q=${encodeURIComponent(busqueda)}&farmacia=${sucursalId}&limit=50`,
             {
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -101,20 +101,20 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
             const productosOptimizados = await resOptimizado.json();
             const productosArray = Array.isArray(productosOptimizados) ? productosOptimizados : [];
             
-            // Mapear productos del endpoint optimizado
+            // Mapear productos del endpoint optimizado según la estructura del backend
             const productosEncontrados: Producto[] = productosArray.map((item: any) => ({
               _id: item.id || item._id || item.codigo,
               id: item.id || item._id || item.codigo,
               codigo: item.codigo || "",
               nombre: item.nombre || item.descripcion || "",
               descripcion: item.descripcion || item.nombre || "",
-              marca: item.marca || item.marca_producto || "",
-              existencia: item.cantidad || item.stock || item.existencia || 0,
-              cantidad: item.cantidad || item.stock || item.existencia || 0,
-              costo_unitario: item.costo_unitario || item.costo || 0,
-              costo: item.costo_unitario || item.costo || 0,
-              precio_unitario: item.precio || item.precio_unitario || item.precio_venta || 0,
-              precio: item.precio || item.precio_unitario || item.precio_venta || 0,
+              marca: item.marca || "",
+              existencia: item.cantidad || 0,
+              cantidad: item.cantidad || 0,
+              costo_unitario: item.costo || 0,
+              costo: item.costo || 0,
+              precio_unitario: item.precio_venta || item.precio || 0,
+              precio: item.precio_venta || item.precio || 0,
             }));
 
             // Guardar en caché
@@ -131,13 +131,16 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
               }
             }
 
+            console.log(`✅ [CARGA_MASIVA] Productos encontrados con endpoint optimizado: ${productosEncontrados.length}`);
             setProductos(productosEncontrados);
             setBuscando(false);
             return;
+          } else {
+            console.warn(`⚠️ [CARGA_MASIVA] Endpoint optimizado retornó ${resOptimizado.status}, usando método alternativo`);
           }
         } catch (err: any) {
           if (err.name === 'AbortError') return;
-          console.warn("Endpoint optimizado no disponible, usando método alternativo:", err);
+          console.warn("⚠️ [CARGA_MASIVA] Endpoint optimizado no disponible, usando método alternativo:", err);
         }
 
         // ✅ OPTIMIZACIÓN 2: Si el endpoint optimizado no está disponible, usar método paralelo
