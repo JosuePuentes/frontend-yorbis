@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -51,15 +51,33 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
   const [success, setSuccess] = useState<string | null>(null);
   const [resultadoCarga, setResultadoCarga] = useState<any>(null);
 
-  // Buscar productos cuando cambia la búsqueda
+  // Caché de búsquedas para mejorar rendimiento
+  const cacheBusquedas = useRef<Map<string, { productos: Producto[]; timestamp: number }>>(new Map());
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
+
+  // Buscar productos cuando cambia la búsqueda - OPTIMIZADO
   useEffect(() => {
     if (!busqueda.trim() || busqueda.length < 2) {
       setProductos([]);
       return;
     }
 
+    // Verificar caché primero
+    const cacheKey = `${sucursalId}_${busqueda.toLowerCase()}`;
+    const cached = cacheBusquedas.current.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
+      console.log(`✅ [CARGA_MASIVA] Usando caché para: "${busqueda}"`);
+      setProductos(cached.productos);
+      return;
+    }
+
+    // AbortController para cancelar peticiones anteriores
+    const abortController = new AbortController();
+
     const timeoutId = setTimeout(async () => {
       setBuscando(true);
+      setError(null);
+      
       try {
         const token = localStorage.getItem("access_token");
         if (!token) {
@@ -67,13 +85,70 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
           return;
         }
 
-        // Buscar productos en inventarios de la sucursal
+        // ✅ OPTIMIZACIÓN 1: Intentar usar endpoint optimizado primero
+        try {
+          const resOptimizado = await fetch(
+            `${API_BASE_URL}/punto-venta/productos/buscar?q=${encodeURIComponent(busqueda)}&sucursal=${sucursalId}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+              signal: abortController.signal,
+            }
+          );
+
+          if (resOptimizado.ok) {
+            const productosOptimizados = await resOptimizado.json();
+            const productosArray = Array.isArray(productosOptimizados) ? productosOptimizados : [];
+            
+            // Mapear productos del endpoint optimizado
+            const productosEncontrados: Producto[] = productosArray.map((item: any) => ({
+              _id: item.id || item._id || item.codigo,
+              id: item.id || item._id || item.codigo,
+              codigo: item.codigo || "",
+              nombre: item.nombre || item.descripcion || "",
+              descripcion: item.descripcion || item.nombre || "",
+              marca: item.marca || item.marca_producto || "",
+              existencia: item.cantidad || item.stock || item.existencia || 0,
+              cantidad: item.cantidad || item.stock || item.existencia || 0,
+              costo_unitario: item.costo_unitario || item.costo || 0,
+              costo: item.costo_unitario || item.costo || 0,
+              precio_unitario: item.precio || item.precio_unitario || item.precio_venta || 0,
+              precio: item.precio || item.precio_unitario || item.precio_venta || 0,
+            }));
+
+            // Guardar en caché
+            cacheBusquedas.current.set(cacheKey, {
+              productos: productosEncontrados,
+              timestamp: Date.now(),
+            });
+
+            // Limpiar caché antiguo (más de 10 minutos)
+            const ahora = Date.now();
+            for (const [key, value] of cacheBusquedas.current.entries()) {
+              if (ahora - value.timestamp > CACHE_DURATION * 2) {
+                cacheBusquedas.current.delete(key);
+              }
+            }
+
+            setProductos(productosEncontrados);
+            setBuscando(false);
+            return;
+          }
+        } catch (err: any) {
+          if (err.name === 'AbortError') return;
+          console.warn("Endpoint optimizado no disponible, usando método alternativo:", err);
+        }
+
+        // ✅ OPTIMIZACIÓN 2: Si el endpoint optimizado no está disponible, usar método paralelo
+        // Obtener inventarios
         const resInventarios = await fetch(
           `${API_BASE_URL}/inventarios?farmacia=${sucursalId}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
             },
+            signal: abortController.signal,
           }
         );
 
@@ -82,66 +157,98 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
         }
 
         const inventarios = await resInventarios.json();
-        const productosEncontrados: Producto[] = [];
+        const inventariosActivos = Array.isArray(inventarios) 
+          ? inventarios.filter((inv: any) => inv.estado === "activo")
+          : [];
 
-        // Buscar en todos los inventarios activos
-        for (const inventario of inventarios) {
-          if (inventario.estado !== "activo") continue;
-
-          const resItems = await fetch(
-            `${API_BASE_URL}/inventarios/${inventario._id}/items`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
-
-          if (resItems.ok) {
-            const items = await resItems.json();
-            items.forEach((item: any) => {
-              const codigo = item.codigo || "";
-              const descripcion = item.descripcion || item.nombre || "";
-              const busquedaLower = busqueda.toLowerCase();
-              
-              // Filtrar por código o descripción
-              if (
-                codigo.toLowerCase().includes(busquedaLower) ||
-                descripcion.toLowerCase().includes(busquedaLower)
-              ) {
-                const productoId = item._id || item.id || item.item_id || codigo;
-                // Evitar duplicados
-                if (!productosEncontrados.find(p => (p._id || p.id) === productoId)) {
-                  productosEncontrados.push({
-                    _id: productoId,
-                    id: productoId,
-                    codigo: codigo,
-                    nombre: descripcion,
-                    descripcion: descripcion,
-                    marca: item.marca || "",
-                    existencia: item.cantidad || item.existencia || 0,
-                    cantidad: item.cantidad || item.existencia || 0,
-                    costo_unitario: item.costo_unitario || item.costo || 0,
-                    costo: item.costo_unitario || item.costo || 0,
-                    precio_unitario: item.precio_unitario || item.precio || 0,
-                    precio: item.precio_unitario || item.precio || 0,
-                  });
-                }
+        // ✅ OPTIMIZACIÓN 3: Cargar items en paralelo con Promise.all
+        const busquedaLower = busqueda.toLowerCase();
+        const promesasItems = inventariosActivos.map(async (inventario: any) => {
+          try {
+            const resItems = await fetch(
+              `${API_BASE_URL}/inventarios/${inventario._id}/items`,
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+                signal: abortController.signal,
               }
+            );
+
+            if (resItems.ok) {
+              const items = await resItems.json();
+              const itemsArray = Array.isArray(items) ? items : [];
+              
+              // Filtrar items que coincidan con la búsqueda
+              return itemsArray.filter((item: any) => {
+                const codigo = (item.codigo || "").toLowerCase();
+                const descripcion = (item.descripcion || item.nombre || "").toLowerCase();
+                const marca = (item.marca || item.marca_producto || "").toLowerCase();
+                return (
+                  codigo.includes(busquedaLower) ||
+                  descripcion.includes(busquedaLower) ||
+                  marca.includes(busquedaLower)
+                );
+              });
+            }
+            return [];
+          } catch (err: any) {
+            if (err.name === 'AbortError') return [];
+            console.error(`Error al cargar items del inventario ${inventario._id}:`, err);
+            return [];
+          }
+        });
+
+        // Esperar todas las promesas en paralelo
+        const resultadosItems = await Promise.all(promesasItems);
+        
+        // Combinar y normalizar productos
+        const productosEncontrados: Producto[] = [];
+        const productosIdsVistos = new Set<string>();
+
+        resultadosItems.flat().forEach((item: any) => {
+          const productoId = item._id || item.id || item.item_id || item.codigo;
+          
+          // Evitar duplicados
+          if (!productosIdsVistos.has(productoId)) {
+            productosIdsVistos.add(productoId);
+            productosEncontrados.push({
+              _id: productoId,
+              id: productoId,
+              codigo: item.codigo || "",
+              nombre: item.descripcion || item.nombre || "",
+              descripcion: item.descripcion || item.nombre || "",
+              marca: item.marca || item.marca_producto || "",
+              existencia: item.cantidad || item.existencia || 0,
+              cantidad: item.cantidad || item.existencia || 0,
+              costo_unitario: item.costo_unitario || item.costo || 0,
+              costo: item.costo_unitario || item.costo || 0,
+              precio_unitario: item.precio_unitario || item.precio || 0,
+              precio: item.precio_unitario || item.precio || 0,
             });
           }
-        }
+        });
+
+        // Guardar en caché
+        cacheBusquedas.current.set(cacheKey, {
+          productos: productosEncontrados,
+          timestamp: Date.now(),
+        });
 
         setProductos(productosEncontrados);
       } catch (err: any) {
+        if (err.name === 'AbortError') return;
         setError(err.message || "Error al buscar productos");
         setProductos([]);
       } finally {
         setBuscando(false);
       }
-    }, 300);
+    }, 500); // ✅ OPTIMIZACIÓN 4: Debounce aumentado a 500ms
 
-    return () => clearTimeout(timeoutId);
+    return () => {
+      clearTimeout(timeoutId);
+      abortController.abort();
+    };
   }, [busqueda, sucursalId]);
 
   // Limpiar cuando se cierra el modal
