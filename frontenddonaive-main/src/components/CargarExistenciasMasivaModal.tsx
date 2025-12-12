@@ -475,6 +475,17 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
       setError(null);
       setSuccess("Producto creado exitosamente y seleccionado");
       
+      // ✅ Notificar a la página principal que se creó un producto nuevo
+      if (onSuccess) {
+        // Pasar el producto nuevo para que se agregue a la lista principal
+        onSuccess([{
+          ...nuevoProducto,
+          producto_id: productoId,
+          cantidad_nueva: nuevoProducto.cantidad,
+          esNuevo: true, // Marcar como nuevo para que se agregue en lugar de actualizar
+        }]);
+      }
+      
       // Limpiar mensaje de éxito después de 3 segundos
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {

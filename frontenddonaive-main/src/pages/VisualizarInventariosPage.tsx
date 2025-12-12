@@ -125,7 +125,62 @@ const VisualizarInventariosPage: React.FC = () => {
       const token = localStorage.getItem("access_token");
       if (!token) return;
 
-      // Obtener todas las compras
+      // ✅ NUEVO: Cargar productos desde inventarios directamente (para productos nuevos y existencias actualizadas)
+      const productosDesdeInventarios: any[] = [];
+      try {
+        // Usar los inventarios que ya están cargados en el estado
+        for (const inventario of inventarios) {
+          const inventarioAny = inventario as any;
+          if (inventarioAny.estado && inventarioAny.estado !== "activo") continue;
+          
+          const inventarioId = inventarioAny._id || inventarioAny.id;
+          const resItems = await fetch(
+            `${API_BASE_URL}/inventarios/${inventarioId}/items`,
+            {
+              headers: { "Authorization": `Bearer ${token}` }
+            }
+          );
+          
+          if (resItems.ok) {
+            const items = await resItems.json();
+            const itemsArray = Array.isArray(items) ? items : [];
+            
+            itemsArray.forEach((item: any) => {
+              const productoId = item._id || item.id || item.codigo;
+              const costo = Number(item.costo_unitario || item.costo || 0);
+              const precio = Number(item.precio_unitario || item.precio || 0);
+              const utilidad = precio - costo;
+              const farmaciaId = inventarioAny.farmacia || inventarioAny.sucursal_id || "";
+              const farmaciaNombre = farmacias.find(f => f.id === farmaciaId)?.nombre || farmaciaId;
+              
+              productosDesdeInventarios.push({
+                _id: productoId,
+                codigo: item.codigo || "",
+                descripcion: item.descripcion || item.nombre || "",
+                marca: item.marca || item.marca_producto || "",
+                costo: costo,
+                costo_unitario: costo,
+                utilidad: utilidad,
+                utilidad_porcentaje: costo > 0 ? (utilidad / costo) * 100 : 0,
+                precio: precio,
+                precio_unitario: precio,
+                cantidad: Number(item.cantidad || item.existencia || 0),
+                existencia: Number(item.cantidad || item.existencia || 0),
+                fecha_carga: inventarioAny.fecha || new Date().toISOString().split('T')[0],
+                sucursal_id: farmaciaId,
+                sucursal_nombre: farmaciaNombre,
+                inventario_id: inventarioId,
+                desdeInventario: true, // Marcar que viene de inventario
+              });
+            });
+          }
+        }
+        console.log(`✅ [INVENTARIOS] Productos cargados desde inventarios: ${productosDesdeInventarios.length}`);
+      } catch (err) {
+        console.warn("⚠️ [INVENTARIOS] Error al cargar productos desde inventarios:", err);
+      }
+
+      // Obtener todas las compras (para productos históricos)
       const resCompras = await fetch(`${API_BASE_URL}/compras`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
@@ -141,6 +196,15 @@ const VisualizarInventariosPage: React.FC = () => {
 
       // Extraer productos de todas las compras
       const todosLosProductos: any[] = [];
+      
+      // ✅ Primero agregar productos desde inventarios (tienen datos más actualizados)
+      const productosInventarioMap = new Map();
+      productosDesdeInventarios.forEach((p: any) => {
+        const key = p.codigo || p._id;
+        if (key) {
+          productosInventarioMap.set(key, p);
+        }
+      });
 
       comprasArray.forEach((compra: any) => {
         // Normalizar items/productos - el backend puede enviar "productos" o "items"
@@ -188,28 +252,49 @@ const VisualizarInventariosPage: React.FC = () => {
             }
           }
 
-          const producto = {
-            _id: item._id || item.id || `${compra._id}_${item.codigo || Math.random()}`,
-            codigo: item.codigo || item.codigo_producto || "",
-            descripcion: item.nombre || item.descripcion || item.descripcion_producto || "",
-            marca: item.marca || item.marca_producto || "",
-            costo: costo,
-            costo_unitario: costo,
-            utilidad: utilidadEnDinero,
-            utilidad_porcentaje: utilidadPorcentaje > 0 && utilidadPorcentaje <= 100 ? utilidadPorcentaje : ((utilidadEnDinero / (costo || 1)) * 100),
-            precio: precio,
-            precio_unitario: precio,
-            cantidad: Number(item.cantidad || item.existencia || item.stock || 0),
-            existencia: Number(item.cantidad || item.existencia || item.stock || 0),
-            fecha_carga: fechaCompra,
-            sucursal_id: sucursalId,
-            sucursal_nombre: sucursalNombre,
-            compra_id: compra._id,
-            inventario_id: inventarioId // Agregar inventario_id para poder editar
-          };
-
-          todosLosProductos.push(producto);
+          const codigoProducto = item.codigo || item.codigo_producto || "";
+          const productoDesdeInventario = codigoProducto ? productosInventarioMap.get(codigoProducto) : null;
+          
+          // ✅ Si el producto existe en inventario, usar esos datos (más actualizados)
+          // Si no, usar los datos de la compra
+          if (productoDesdeInventario) {
+            // Actualizar con datos de inventario pero mantener referencia a compra
+            todosLosProductos.push({
+              ...productoDesdeInventario,
+              compra_id: compra._id,
+              fecha_carga: fechaCompra,
+            });
+            // Eliminar del mapa para evitar duplicados
+            productosInventarioMap.delete(codigoProducto);
+          } else {
+            // Producto solo en compras (histórico)
+            const producto = {
+              _id: item._id || item.id || `${compra._id}_${codigoProducto || Math.random()}`,
+              codigo: codigoProducto,
+              descripcion: item.nombre || item.descripcion || item.descripcion_producto || "",
+              marca: item.marca || item.marca_producto || "",
+              costo: costo,
+              costo_unitario: costo,
+              utilidad: utilidadEnDinero,
+              utilidad_porcentaje: utilidadPorcentaje > 0 && utilidadPorcentaje <= 100 ? utilidadPorcentaje : ((utilidadEnDinero / (costo || 1)) * 100),
+              precio: precio,
+              precio_unitario: precio,
+              cantidad: Number(item.cantidad || item.existencia || item.stock || 0),
+              existencia: Number(item.cantidad || item.existencia || item.stock || 0),
+              fecha_carga: fechaCompra,
+              sucursal_id: sucursalId,
+              sucursal_nombre: sucursalNombre,
+              compra_id: compra._id,
+              inventario_id: inventarioId
+            };
+            todosLosProductos.push(producto);
+          }
         });
+      });
+      
+      // ✅ Agregar productos que solo están en inventarios (productos nuevos creados directamente)
+      productosInventarioMap.forEach((producto: any) => {
+        todosLosProductos.push(producto);
       });
 
       console.log(`✅ [INVENTARIOS] Productos cargados desde compras: ${todosLosProductos.length}`);
@@ -1255,22 +1340,29 @@ const VisualizarInventariosPage: React.FC = () => {
             }}
             sucursalId={sucursalSeleccionadaParaCargarMasiva}
             onSuccess={(productosActualizados) => {
-              // ✅ Actualizar solo los productos modificados sin recargar toda la página
+              // ✅ Actualizar productos modificados y agregar productos nuevos
               if (productosActualizados && productosActualizados.length > 0) {
                 console.log(`🔄 [INVENTARIOS] Actualizando ${productosActualizados.length} productos sin recargar página`);
                 setTodosLosProductos((prevProductos) => {
                   const productosActualizadosMap = new Map();
+                  const productosNuevos: any[] = [];
+                  
                   productosActualizados.forEach((p: any) => {
                     const id = p._id || p.id || p.producto_id || p.codigo;
                     productosActualizadosMap.set(id, p);
+                    
+                    // Si es un producto nuevo, agregarlo a la lista de nuevos
+                    if (p.esNuevo) {
+                      productosNuevos.push(p);
+                    }
                   });
 
-                  // Actualizar solo los productos que fueron modificados
-                  return prevProductos.map((producto: any) => {
+                  // Primero actualizar productos existentes
+                  let productosActualizadosLista = prevProductos.map((producto: any) => {
                     const productoId = producto._id || producto.id || producto.codigo;
                     const productoActualizado = productosActualizadosMap.get(productoId);
                     
-                    if (productoActualizado) {
+                    if (productoActualizado && !productoActualizado.esNuevo) {
                       // Actualizar con los nuevos datos
                       return {
                         ...producto,
@@ -1284,6 +1376,39 @@ const VisualizarInventariosPage: React.FC = () => {
                     }
                     return producto;
                   });
+                  
+                  // Agregar productos nuevos al inicio de la lista
+                  productosNuevos.forEach((productoNuevo: any) => {
+                    const productoId = productoNuevo._id || productoNuevo.id || productoNuevo.codigo;
+                    // Verificar que no exista ya en la lista
+                    const existe = productosActualizadosLista.find((p: any) => 
+                      (p._id || p.id || p.codigo) === productoId
+                    );
+                    
+                    if (!existe) {
+                      // Mapear el producto nuevo al formato de la lista principal
+                      const productoMapeado = {
+                        _id: productoNuevo._id || productoNuevo.id || productoNuevo.codigo,
+                        codigo: productoNuevo.codigo || "",
+                        descripcion: productoNuevo.descripcion || productoNuevo.nombre || "",
+                        marca: productoNuevo.marca || "",
+                        costo: productoNuevo.costo || productoNuevo.costo_unitario || 0,
+                        costo_unitario: productoNuevo.costo_unitario || productoNuevo.costo || 0,
+                        utilidad: productoNuevo.utilidad || 0,
+                        utilidad_porcentaje: productoNuevo.porcentaje_utilidad || 0,
+                        precio: productoNuevo.precio || productoNuevo.precio_unitario || 0,
+                        precio_unitario: productoNuevo.precio_unitario || productoNuevo.precio || 0,
+                        cantidad: productoNuevo.cantidad || productoNuevo.cantidad_nueva || 0,
+                        existencia: productoNuevo.existencia || productoNuevo.cantidad_nueva || 0,
+                        fecha_carga: new Date().toISOString().split('T')[0],
+                        sucursal_id: sucursalSeleccionadaParaCargarMasiva,
+                        sucursal_nombre: farmacias.find(f => f.id === sucursalSeleccionadaParaCargarMasiva)?.nombre || "",
+                      };
+                      productosActualizadosLista = [productoMapeado, ...productosActualizadosLista];
+                    }
+                  });
+                  
+                  return productosActualizadosLista;
                 });
               } else {
                 // Si no hay productos actualizados, recargar toda la lista como fallback
