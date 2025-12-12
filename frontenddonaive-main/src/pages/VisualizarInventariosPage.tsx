@@ -1254,9 +1254,42 @@ const VisualizarInventariosPage: React.FC = () => {
               setSucursalSeleccionadaParaCargarMasiva("");
             }}
             sucursalId={sucursalSeleccionadaParaCargarMasiva}
-            onSuccess={() => {
-              // Refrescar productos después de carga masiva
-              cargarTodosLosProductos();
+            onSuccess={(productosActualizados) => {
+              // ✅ Actualizar solo los productos modificados sin recargar toda la página
+              if (productosActualizados && productosActualizados.length > 0) {
+                console.log(`🔄 [INVENTARIOS] Actualizando ${productosActualizados.length} productos sin recargar página`);
+                setTodosLosProductos((prevProductos) => {
+                  const productosActualizadosMap = new Map();
+                  productosActualizados.forEach((p: any) => {
+                    const id = p._id || p.id || p.producto_id || p.codigo;
+                    productosActualizadosMap.set(id, p);
+                  });
+
+                  // Actualizar solo los productos que fueron modificados
+                  return prevProductos.map((producto: any) => {
+                    const productoId = producto._id || producto.id || producto.codigo;
+                    const productoActualizado = productosActualizadosMap.get(productoId);
+                    
+                    if (productoActualizado) {
+                      // Actualizar con los nuevos datos
+                      return {
+                        ...producto,
+                        cantidad: productoActualizado.cantidad || productoActualizado.cantidad_nueva || producto.cantidad,
+                        existencia: productoActualizado.existencia || productoActualizado.cantidad_nueva || producto.existencia,
+                        costo_unitario: productoActualizado.costo_unitario || productoActualizado.costo || producto.costo_unitario,
+                        costo: productoActualizado.costo || producto.costo_unitario || producto.costo,
+                        precio_unitario: productoActualizado.precio_unitario || productoActualizado.precio_venta || producto.precio_unitario,
+                        precio: productoActualizado.precio || productoActualizado.precio_venta || producto.precio,
+                      };
+                    }
+                    return producto;
+                  });
+                });
+              } else {
+                // Si no hay productos actualizados, recargar toda la lista como fallback
+                console.log(`🔄 [INVENTARIOS] No hay productos actualizados, recargando toda la lista`);
+                cargarTodosLosProductos();
+              }
             }}
           />
         )}

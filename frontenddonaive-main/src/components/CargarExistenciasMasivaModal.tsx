@@ -32,7 +32,7 @@ interface CargarExistenciasMasivaModalProps {
   open: boolean;
   onClose: () => void;
   sucursalId: string;
-  onSuccess?: () => void;
+  onSuccess?: (productosActualizados?: any[]) => void; // ✅ Recibe productos actualizados
 }
 
 const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> = ({
@@ -407,14 +407,18 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
       const resultado = await res.json();
       setResultadoCarga(resultado);
 
-      // Actualizar productos en el estado local
+      // ✅ Preparar productos actualizados para pasar al callback
+      const productosActualizados: any[] = [];
+
+      // Actualizar productos en el estado local y preparar para callback
       if (resultado.detalle?.exitosos) {
         resultado.detalle.exitosos.forEach((productoActualizado: any) => {
+          // Actualizar en el estado local del modal
           setProductos((prevProductos) =>
             prevProductos.map((p) => {
               const productoId = p._id || p.id || p.codigo;
               if (productoId === productoActualizado.producto_id) {
-                return {
+                const productoActualizadoLocal = {
                   ...p,
                   cantidad: productoActualizado.cantidad_nueva,
                   existencia: productoActualizado.cantidad_nueva,
@@ -423,6 +427,18 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
                   precio_unitario: productoActualizado.precio_venta || p.precio_unitario,
                   precio: productoActualizado.precio_venta || p.precio,
                 };
+                
+                // Agregar a la lista de productos actualizados para el callback
+                productosActualizados.push({
+                  ...productoActualizadoLocal,
+                  _id: productoId,
+                  id: productoId,
+                  // Incluir campos adicionales que la página principal pueda necesitar
+                  producto_id: productoActualizado.producto_id,
+                  cantidad_nueva: productoActualizado.cantidad_nueva,
+                });
+                
+                return productoActualizadoLocal;
               }
               return p;
             })
@@ -434,11 +450,10 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
         `Carga masiva completada: ${resultado.detalle?.exitosos?.length || 0} productos actualizados`
       );
 
-      // Llamar onSuccess para refrescar la lista principal
+      // ✅ Llamar onSuccess con los productos actualizados (sin recargar toda la página)
       if (onSuccess) {
-        setTimeout(() => {
-          onSuccess();
-        }, 1000);
+        // Pasar los productos actualizados para que la página principal los actualice selectivamente
+        onSuccess(productosActualizados);
       }
     } catch (err: any) {
       setError(err.message || "Error al cargar existencias");
