@@ -82,7 +82,8 @@ const VerItemsInventarioModal: React.FC<VerItemsInventarioModalProps> = ({
 
             if (resAlt1.ok) {
               const data = await resAlt1.json();
-              const itemsArray = Array.isArray(data) ? data : (data.productos || data.items || []);
+              // ✅ Cambio: El endpoint ahora retorna array directo, no objeto con productos
+              const itemsArray = Array.isArray(data) ? data : [];
               
               // Normalizar los datos
               const itemsNormalizados = itemsArray.map((item: any) => {

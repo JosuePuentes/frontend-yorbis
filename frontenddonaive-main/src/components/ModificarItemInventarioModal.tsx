@@ -129,7 +129,8 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
 
             if (resAlt1.ok) {
               const items = await resAlt1.json();
-              const itemsArray = Array.isArray(items) ? items : (items.productos || items.items || []);
+              // ✅ Cambio: El endpoint ahora retorna array directo, no objeto con productos
+              const itemsArray = Array.isArray(items) ? items : [];
               
               // Mapear items del inventario a productos para el modal
               const todosProductos: Producto[] = itemsArray.map((item: any) => {
@@ -142,6 +143,7 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
                 const precioUnitario = Number(item.precio_unitario || item.precio_venta || 0);
                 
                 return {
+                  id: productoId, // ✅ Agregado campo id requerido
                   _id: productoId,
                   codigo: codigoProducto,
                   descripcion: descripcionProducto,
@@ -171,7 +173,8 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
 
             if (resAlt2.ok) {
               const data = await resAlt2.json();
-              const productos = Array.isArray(data) ? data : (data.productos || []);
+              // ✅ Cambio: El endpoint ahora retorna array directo, no objeto con productos
+              const productos = Array.isArray(data) ? data : [];
               // Filtrar productos que pertenezcan a este inventario
               const itemsFiltrados = productos.filter((p: any) => 
                 p.inventario_id === inventarioId || 
@@ -190,6 +193,7 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
                 const precioUnitario = Number(item.precio_unitario || item.precio_venta || 0);
                 
                 return {
+                  id: productoId, // ✅ Agregado campo id requerido
                   _id: productoId,
                   codigo: codigoProducto,
                   descripcion: descripcionProducto,

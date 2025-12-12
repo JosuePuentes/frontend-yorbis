@@ -1515,7 +1515,8 @@ const PuntoVentaPage: React.FC = () => {
                   );
                   if (resAlt.ok) {
                     const data = await resAlt.json();
-                    itemsInventario = Array.isArray(data) ? data : (data.productos || data.items || []);
+                    // ✅ Cambio: El endpoint ahora retorna array directo, no objeto con productos
+                    itemsInventario = Array.isArray(data) ? data : [];
                     console.log(`✅ [PuntoVenta] Items obtenidos desde endpoint alternativo: ${itemsInventario.length} items`);
                   }
                 } catch (err) {
