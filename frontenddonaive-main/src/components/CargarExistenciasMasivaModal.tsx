@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, CheckSquare, Square, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Search, CheckSquare, Square, Loader2, AlertCircle, CheckCircle2, Plus, X } from "lucide-react";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -50,6 +50,17 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [resultadoCarga, setResultadoCarga] = useState<any>(null);
+  
+  // Estados para crear producto nuevo
+  const [mostrarFormularioCrear, setMostrarFormularioCrear] = useState(false);
+  const [creandoProducto, setCreandoProducto] = useState(false);
+  const [codigoNuevo, setCodigoNuevo] = useState("");
+  const [nombreNuevo, setNombreNuevo] = useState("");
+  const [descripcionNuevo, setDescripcionNuevo] = useState("");
+  const [marcaNuevo, setMarcaNuevo] = useState("");
+  const [costoNuevo, setCostoNuevo] = useState("");
+  const [utilidadNuevo, setUtilidadNuevo] = useState("");
+  const [porcentajeUtilidadNuevo, setPorcentajeUtilidadNuevo] = useState("40");
 
   // Caché de búsquedas para mejorar rendimiento
   const cacheBusquedas = useRef<Map<string, { productos: Producto[]; timestamp: number }>>(new Map());
@@ -327,6 +338,152 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
     }
   };
 
+  const handleCrearProducto = async () => {
+    if (!nombreNuevo.trim() || !costoNuevo) {
+      setError("Nombre y costo son obligatorios");
+      return;
+    }
+
+    const costo = parseFloat(costoNuevo);
+    if (isNaN(costo) || costo <= 0) {
+      setError("El costo debe ser un número mayor a 0");
+      return;
+    }
+
+    setCreandoProducto(true);
+    setError(null);
+
+    try {
+      const token = localStorage.getItem("access_token");
+      if (!token) {
+        throw new Error("No se encontró el token de autenticación");
+      }
+
+      // Calcular precio según utilidad o porcentaje
+      let precio = 0;
+      let utilidad = 0;
+      let porcentajeUtilidad = 40;
+
+      if (utilidadNuevo && parseFloat(utilidadNuevo) > 0) {
+        // Si se proporciona utilidad en dinero
+        utilidad = parseFloat(utilidadNuevo);
+        precio = costo + utilidad;
+        porcentajeUtilidad = costo > 0 ? (utilidad / costo) * 100 : 0;
+      } else if (porcentajeUtilidadNuevo && parseFloat(porcentajeUtilidadNuevo) > 0) {
+        // Si se proporciona porcentaje de utilidad
+        porcentajeUtilidad = parseFloat(porcentajeUtilidadNuevo);
+        utilidad = (costo * porcentajeUtilidad) / 100;
+        precio = costo + utilidad;
+      } else {
+        // Por defecto 40%
+        porcentajeUtilidad = 40;
+        utilidad = (costo * porcentajeUtilidad) / 100;
+        precio = costo + utilidad;
+      }
+
+      // Preparar body según la estructura del backend
+      const bodyRequest: any = {
+        farmacia: sucursalId,
+        nombre: nombreNuevo.trim(),
+        costo: costo,
+      };
+
+      // Campos opcionales
+      if (codigoNuevo.trim()) {
+        bodyRequest.codigo = codigoNuevo.trim();
+      }
+      if (descripcionNuevo.trim()) {
+        bodyRequest.descripcion = descripcionNuevo.trim();
+      }
+      if (marcaNuevo.trim()) {
+        bodyRequest.marca = marcaNuevo.trim();
+      }
+      if (utilidad > 0) {
+        bodyRequest.utilidad = utilidad;
+      }
+      if (porcentajeUtilidad > 0) {
+        bodyRequest.porcentaje_utilidad = porcentajeUtilidad;
+      }
+      if (precio > 0) {
+        bodyRequest.precio_venta = precio;
+      }
+
+      const res = await fetch(`${API_BASE_URL}/inventarios/crear-producto`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(bodyRequest),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(
+          errorData.detail || errorData.message || "Error al crear el producto"
+        );
+      }
+
+      const respuesta = await res.json();
+      
+      // El backend retorna { message, producto }
+      const productoCreado = respuesta.producto || respuesta;
+      
+      // Agregar el producto a la lista de productos disponibles
+      const nuevoProducto: Producto = {
+        _id: productoCreado.id || productoCreado._id || productoCreado.codigo,
+        id: productoCreado.id || productoCreado._id || productoCreado.codigo,
+        codigo: productoCreado.codigo || "",
+        nombre: productoCreado.nombre || productoCreado.descripcion || "",
+        descripcion: productoCreado.descripcion || productoCreado.nombre || "",
+        marca: productoCreado.marca || "",
+        existencia: productoCreado.cantidad || 0,
+        cantidad: productoCreado.cantidad || 0,
+        costo_unitario: productoCreado.costo || 0,
+        costo: productoCreado.costo || 0,
+        precio_unitario: productoCreado.precio_venta || precio,
+        precio: productoCreado.precio_venta || precio,
+      };
+
+      // Agregar a la lista de productos
+      setProductos((prev) => [nuevoProducto, ...prev]);
+
+      // Seleccionar automáticamente el producto recién creado
+      const productoId = nuevoProducto._id || nuevoProducto.id || nuevoProducto.codigo;
+      setProductosSeleccionados((prev) => new Set([...prev, productoId]));
+
+      // Inicializar datos de carga para el nuevo producto
+      setDatosCarga((prev) => ({
+        ...prev,
+        [productoId]: {
+          cantidad: "",
+          costo: "",
+          utilidad: "",
+          porcentaje_utilidad: porcentajeUtilidad.toString(),
+        },
+      }));
+
+      // Limpiar formulario y cerrar
+      setMostrarFormularioCrear(false);
+      setCodigoNuevo("");
+      setNombreNuevo("");
+      setDescripcionNuevo("");
+      setMarcaNuevo("");
+      setCostoNuevo("");
+      setUtilidadNuevo("");
+      setPorcentajeUtilidadNuevo("40");
+      setError(null);
+      setSuccess("Producto creado exitosamente y seleccionado");
+      
+      // Limpiar mensaje de éxito después de 3 segundos
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.message || "Error al crear el producto");
+    } finally {
+      setCreandoProducto(false);
+    }
+  };
+
   const handleCargarExistenciaMasiva = async () => {
     if (productosSeleccionados.size === 0) {
       setError("Debe seleccionar al menos un producto");
@@ -486,17 +643,182 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
           </div>
         )}
 
-        {/* Búsqueda */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
-          <Input
-            type="text"
-            placeholder="Buscar productos por código o descripción..."
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            className="pl-10"
-          />
+        {/* Búsqueda y Botón Crear Producto */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
+            <Input
+              type="text"
+              placeholder="Buscar productos por código o descripción..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Button
+            onClick={() => setMostrarFormularioCrear(true)}
+            variant="outline"
+            className="flex items-center gap-2 bg-green-50 hover:bg-green-100 text-green-700 border-green-300"
+          >
+            <Plus className="w-4 h-4" />
+            Crear Producto Nuevo
+          </Button>
         </div>
+
+        {/* Formulario para crear producto nuevo */}
+        {mostrarFormularioCrear && (
+          <div className="mt-4 p-4 bg-slate-50 rounded-lg border-2 border-green-200">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold text-slate-800">Crear Producto Nuevo</h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setMostrarFormularioCrear(false);
+                  setCodigoNuevo("");
+                  setNombreNuevo("");
+                  setDescripcionNuevo("");
+                  setMarcaNuevo("");
+                  setCostoNuevo("");
+                  setUtilidadNuevo("");
+                  setPorcentajeUtilidadNuevo("40");
+                  setError(null);
+                }}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Código (opcional)
+                </label>
+                <Input
+                  type="text"
+                  placeholder="Código del producto"
+                  value={codigoNuevo}
+                  onChange={(e) => setCodigoNuevo(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Nombre <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="text"
+                  placeholder="Nombre del producto"
+                  value={nombreNuevo}
+                  onChange={(e) => setNombreNuevo(e.target.value)}
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Descripción (opcional)
+                </label>
+                <Input
+                  type="text"
+                  placeholder="Descripción del producto"
+                  value={descripcionNuevo}
+                  onChange={(e) => setDescripcionNuevo(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Marca (opcional)
+                </label>
+                <Input
+                  type="text"
+                  placeholder="Marca del producto"
+                  value={marcaNuevo}
+                  onChange={(e) => setMarcaNuevo(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Costo <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={costoNuevo}
+                  onChange={(e) => setCostoNuevo(e.target.value)}
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Utilidad (opcional)
+                </label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="Utilidad en dinero"
+                  value={utilidadNuevo}
+                  onChange={(e) => setUtilidadNuevo(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  % Utilidad (opcional, default: 40%)
+                </label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  placeholder="40"
+                  value={porcentajeUtilidadNuevo}
+                  onChange={(e) => setPorcentajeUtilidadNuevo(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setMostrarFormularioCrear(false);
+                  setCodigoNuevo("");
+                  setNombreNuevo("");
+                  setDescripcionNuevo("");
+                  setMarcaNuevo("");
+                  setCostoNuevo("");
+                  setUtilidadNuevo("");
+                  setPorcentajeUtilidadNuevo("40");
+                  setError(null);
+                }}
+                disabled={creandoProducto}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleCrearProducto}
+                disabled={creandoProducto || !nombreNuevo.trim() || !costoNuevo}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {creandoProducto ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Creando...
+                  </>
+                ) : (
+                  "Crear Producto"
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
 
         {buscando && (
           <div className="text-center py-4 text-slate-500 text-sm flex items-center justify-center gap-2">
