@@ -1343,40 +1343,63 @@ const VisualizarInventariosPage: React.FC = () => {
               // ✅ Actualizar productos modificados y agregar productos nuevos
               if (productosActualizados && productosActualizados.length > 0) {
                 console.log(`🔄 [INVENTARIOS] Actualizando ${productosActualizados.length} productos sin recargar página`);
+                console.log(`📦 [INVENTARIOS] Productos recibidos:`, productosActualizados);
+                
                 setTodosLosProductos((prevProductos) => {
+                  console.log(`📋 [INVENTARIOS] Productos actuales en lista: ${prevProductos.length}`);
+                  
                   const productosActualizadosMap = new Map();
                   const productosNuevos: any[] = [];
                   
+                  // Crear mapa con múltiples claves (código, id, _id) para facilitar la búsqueda
                   productosActualizados.forEach((p: any) => {
-                    const id = p._id || p.id || p.producto_id || p.codigo;
-                    productosActualizadosMap.set(id, p);
+                    const codigo = (p.codigo || "").trim();
+                    const id = p._id || p.id || p.producto_id || codigo;
+                    
+                    // Agregar al mapa con código como clave principal
+                    if (codigo) {
+                      productosActualizadosMap.set(codigo.toLowerCase(), p);
+                    }
+                    // También agregar con ID
+                    if (id) {
+                      productosActualizadosMap.set(id, p);
+                    }
                     
                     // Si es un producto nuevo, agregarlo a la lista de nuevos
                     if (p.esNuevo) {
                       productosNuevos.push(p);
+                      console.log(`✨ [INVENTARIOS] Producto nuevo detectado:`, { codigo: p.codigo, nombre: p.descripcion || p.nombre });
                     }
                   });
 
                   // Primero actualizar productos existentes
                   let productosActualizadosLista = prevProductos.map((producto: any) => {
-                    // ✅ Buscar por múltiples identificadores para asegurar que encontramos el producto correcto
-                    const productoId = producto._id || producto.id || producto.codigo;
-                    const productoCodigo = producto.codigo;
+                    const productoCodigo = (producto.codigo || "").trim().toLowerCase();
+                    const productoId = producto._id || producto.id || productoCodigo;
                     
-                    // Intentar encontrar el producto actualizado por ID o código
-                    let productoActualizado = productosActualizadosMap.get(productoId);
+                    // ✅ Buscar por código primero (más confiable)
+                    let productoActualizado = productoCodigo ? productosActualizadosMap.get(productoCodigo) : null;
+                    
+                    // Si no se encontró por código, buscar por ID
+                    if (!productoActualizado) {
+                      productoActualizado = productosActualizadosMap.get(productoId);
+                    }
+                    
+                    // Si aún no se encontró, buscar en el array directamente por código
                     if (!productoActualizado && productoCodigo) {
-                      // Si no se encontró por ID, buscar por código
-                      for (const [, value] of productosActualizadosMap.entries()) {
-                        const codigoActualizado = value.codigo || value.producto_id;
-                        if (codigoActualizado === productoCodigo) {
-                          productoActualizado = value;
-                          break;
-                        }
-                      }
+                      productoActualizado = productosActualizados.find((p: any) => {
+                        const codigoP = (p.codigo || "").trim().toLowerCase();
+                        return codigoP === productoCodigo;
+                      });
                     }
                     
                     if (productoActualizado && !productoActualizado.esNuevo) {
+                      console.log(`✅ [INVENTARIOS] Actualizando producto:`, {
+                        codigo: producto.codigo,
+                        cantidad_anterior: producto.cantidad,
+                        cantidad_nueva: productoActualizado.cantidad_nueva
+                      });
+                      
                       // ✅ Actualizar con los nuevos datos - PRIORIZAR cantidad_nueva que viene del backend
                       return {
                         ...producto,
@@ -1386,6 +1409,7 @@ const VisualizarInventariosPage: React.FC = () => {
                         costo: productoActualizado.costo || producto.costo_unitario || producto.costo,
                         precio_unitario: productoActualizado.precio_unitario || productoActualizado.precio_venta || producto.precio_unitario,
                         precio: productoActualizado.precio || productoActualizado.precio_venta || producto.precio,
+                        marca: productoActualizado.marca || producto.marca, // ✅ Actualizar marca también
                       };
                     }
                     return producto;
@@ -1393,17 +1417,23 @@ const VisualizarInventariosPage: React.FC = () => {
                   
                   // Agregar productos nuevos al inicio de la lista
                   productosNuevos.forEach((productoNuevo: any) => {
-                    const productoId = productoNuevo._id || productoNuevo.id || productoNuevo.codigo;
-                    // Verificar que no exista ya en la lista
-                    const existe = productosActualizadosLista.find((p: any) => 
-                      (p._id || p.id || p.codigo) === productoId
-                    );
+                    const codigoNuevo = (productoNuevo.codigo || "").trim();
+                    const productoIdNuevo = productoNuevo._id || productoNuevo.id || codigoNuevo;
+                    
+                    // ✅ Verificar que no exista ya en la lista (por código o ID)
+                    const existe = productosActualizadosLista.find((p: any) => {
+                      const codigoP = (p.codigo || "").trim();
+                      const idP = p._id || p.id || codigoP;
+                      return codigoP === codigoNuevo || idP === productoIdNuevo;
+                    });
                     
                     if (!existe) {
+                      console.log(`➕ [INVENTARIOS] Agregando producto nuevo a la lista:`, { codigo: codigoNuevo, nombre: productoNuevo.descripcion || productoNuevo.nombre });
+                      
                       // Mapear el producto nuevo al formato de la lista principal
                       const productoMapeado = {
                         _id: productoNuevo._id || productoNuevo.id || productoNuevo.codigo,
-                        codigo: productoNuevo.codigo || "",
+                        codigo: codigoNuevo,
                         descripcion: productoNuevo.descripcion || productoNuevo.nombre || "",
                         marca: productoNuevo.marca || "",
                         costo: productoNuevo.costo || productoNuevo.costo_unitario || 0,
@@ -1417,11 +1447,15 @@ const VisualizarInventariosPage: React.FC = () => {
                         fecha_carga: new Date().toISOString().split('T')[0],
                         sucursal_id: sucursalSeleccionadaParaCargarMasiva,
                         sucursal_nombre: farmacias.find(f => f.id === sucursalSeleccionadaParaCargarMasiva)?.nombre || "",
+                        desdeInventario: true, // Marcar que viene de inventario
                       };
                       productosActualizadosLista = [productoMapeado, ...productosActualizadosLista];
+                    } else {
+                      console.log(`⚠️ [INVENTARIOS] Producto nuevo ya existe en la lista, no se agregará:`, codigoNuevo);
                     }
                   });
                   
+                  console.log(`✅ [INVENTARIOS] Lista actualizada: ${productosActualizadosLista.length} productos`);
                   return productosActualizadosLista;
                 });
               } else {

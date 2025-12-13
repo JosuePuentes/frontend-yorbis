@@ -629,7 +629,10 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
                   ...productoActualizadoLocal,
                   _id: productoId,
                   id: productoId,
-                  codigo: p.codigo, // ✅ Asegurar que el código esté presente
+                  codigo: p.codigo || productoActualizado.codigo || "", // ✅ Asegurar que el código esté presente
+                  nombre: p.nombre || p.descripcion || productoActualizado.nombre || productoActualizado.descripcion || "",
+                  descripcion: p.descripcion || p.nombre || productoActualizado.descripcion || productoActualizado.nombre || "",
+                  marca: p.marca || productoActualizado.marca || "",
                   // Incluir campos adicionales que la página principal pueda necesitar
                   producto_id: productoActualizado.producto_id || productoId,
                   cantidad_nueva: productoActualizado.cantidad_nueva,
