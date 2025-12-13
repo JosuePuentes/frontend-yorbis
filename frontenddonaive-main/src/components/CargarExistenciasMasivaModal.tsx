@@ -68,8 +68,10 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
 
   // Buscar productos cuando cambia la búsqueda - OPTIMIZADO
   useEffect(() => {
+    // ✅ No limpiar productos si la búsqueda está vacía - mantener productos creados/actualizados
     if (!busqueda.trim() || busqueda.length < 2) {
-      setProductos([]);
+      // Solo limpiar si no hay productos en el estado (para evitar perder productos creados)
+      // setProductos([]);
       return;
     }
 
@@ -445,12 +447,32 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
         precio: productoCreado.precio_venta || precio,
       };
 
-      // Agregar a la lista de productos
-      setProductos((prev) => [nuevoProducto, ...prev]);
+      // ✅ Agregar a la lista de productos (al inicio para que sea visible)
+      setProductos((prev) => {
+        // Verificar que no esté duplicado
+        const existe = prev.find(p => 
+          (p._id || p.id || p.codigo) === (nuevoProducto._id || nuevoProducto.id || nuevoProducto.codigo) ||
+          p.codigo === nuevoProducto.codigo
+        );
+        if (existe) {
+          // Si existe, actualizarlo en lugar de agregarlo
+          return prev.map(p => 
+            (p._id || p.id || p.codigo) === (nuevoProducto._id || nuevoProducto.id || nuevoProducto.codigo) ||
+            p.codigo === nuevoProducto.codigo
+              ? nuevoProducto
+              : p
+          );
+        }
+        // Si no existe, agregarlo al inicio
+        return [nuevoProducto, ...prev];
+      });
 
       // Seleccionar automáticamente el producto recién creado
       const productoId = nuevoProducto._id || nuevoProducto.id || nuevoProducto.codigo;
       setProductosSeleccionados((prev) => new Set([...prev, productoId]));
+      
+      // ✅ Limpiar la búsqueda para que el producto nuevo sea visible
+      setBusqueda("");
 
       // Inicializar datos de carga para el nuevo producto
       setDatosCarga((prev) => ({
@@ -581,11 +603,17 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
       // Actualizar productos en el estado local y preparar para callback
       if (resultado.detalle?.exitosos) {
         resultado.detalle.exitosos.forEach((productoActualizado: any) => {
-          // Actualizar en el estado local del modal
+          // ✅ Actualizar en el estado local del modal
+          // Buscar el producto por producto_id, _id, id o codigo
           setProductos((prevProductos) =>
             prevProductos.map((p) => {
               const productoId = p._id || p.id || p.codigo;
-              if (productoId === productoActualizado.producto_id) {
+              const productoIdBackend = productoActualizado.producto_id || productoActualizado._id || productoActualizado.id || productoActualizado.codigo;
+              
+              // ✅ Comparar por múltiples campos para asegurar que encontramos el producto correcto
+              if (productoId === productoIdBackend || 
+                  p.codigo === productoActualizado.codigo ||
+                  (productoActualizado.codigo && p.codigo === productoActualizado.codigo)) {
                 const productoActualizadoLocal = {
                   ...p,
                   cantidad: productoActualizado.cantidad_nueva,
@@ -601,8 +629,9 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
                   ...productoActualizadoLocal,
                   _id: productoId,
                   id: productoId,
+                  codigo: p.codigo, // ✅ Asegurar que el código esté presente
                   // Incluir campos adicionales que la página principal pueda necesitar
-                  producto_id: productoActualizado.producto_id,
+                  producto_id: productoActualizado.producto_id || productoId,
                   cantidad_nueva: productoActualizado.cantidad_nueva,
                 });
                 

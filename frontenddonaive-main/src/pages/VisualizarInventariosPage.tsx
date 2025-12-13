@@ -1359,15 +1359,29 @@ const VisualizarInventariosPage: React.FC = () => {
 
                   // Primero actualizar productos existentes
                   let productosActualizadosLista = prevProductos.map((producto: any) => {
+                    // ✅ Buscar por múltiples identificadores para asegurar que encontramos el producto correcto
                     const productoId = producto._id || producto.id || producto.codigo;
-                    const productoActualizado = productosActualizadosMap.get(productoId);
+                    const productoCodigo = producto.codigo;
+                    
+                    // Intentar encontrar el producto actualizado por ID o código
+                    let productoActualizado = productosActualizadosMap.get(productoId);
+                    if (!productoActualizado && productoCodigo) {
+                      // Si no se encontró por ID, buscar por código
+                      for (const [, value] of productosActualizadosMap.entries()) {
+                        const codigoActualizado = value.codigo || value.producto_id;
+                        if (codigoActualizado === productoCodigo) {
+                          productoActualizado = value;
+                          break;
+                        }
+                      }
+                    }
                     
                     if (productoActualizado && !productoActualizado.esNuevo) {
-                      // Actualizar con los nuevos datos
+                      // ✅ Actualizar con los nuevos datos - PRIORIZAR cantidad_nueva que viene del backend
                       return {
                         ...producto,
-                        cantidad: productoActualizado.cantidad || productoActualizado.cantidad_nueva || producto.cantidad,
-                        existencia: productoActualizado.existencia || productoActualizado.cantidad_nueva || producto.existencia,
+                        cantidad: productoActualizado.cantidad_nueva !== undefined ? productoActualizado.cantidad_nueva : (productoActualizado.cantidad || producto.cantidad),
+                        existencia: productoActualizado.cantidad_nueva !== undefined ? productoActualizado.cantidad_nueva : (productoActualizado.existencia || producto.existencia),
                         costo_unitario: productoActualizado.costo_unitario || productoActualizado.costo || producto.costo_unitario,
                         costo: productoActualizado.costo || producto.costo_unitario || producto.costo,
                         precio_unitario: productoActualizado.precio_unitario || productoActualizado.precio_venta || producto.precio_unitario,
