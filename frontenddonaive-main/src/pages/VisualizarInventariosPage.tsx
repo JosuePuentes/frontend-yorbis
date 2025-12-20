@@ -52,7 +52,8 @@ const VisualizarInventariosPage: React.FC = () => {
   const [showEliminarProductoModal, setShowEliminarProductoModal] = useState(false);
   const [eliminandoProducto, setEliminandoProducto] = useState(false);
   const [showCargarExistenciasModal, setShowCargarExistenciasModal] = useState(false);
-  const [busquedaInventario, setBusquedaInventario] = useState(""); // Buscador para inventarios
+  const [busquedaInventario, setBusquedaInventario] = useState(""); // Buscador para inventarios (documentos)
+  const [busquedaItemInventario, setBusquedaItemInventario] = useState(""); // Buscador para items/productos en vista inventarios
   const [sucursalSeleccionadaParaCargar, setSucursalSeleccionadaParaCargar] = useState<string>("");
   const [showCargarExistenciasMasivaModal, setShowCargarExistenciasMasivaModal] = useState(false);
   const [sucursalSeleccionadaParaCargarMasiva, setSucursalSeleccionadaParaCargarMasiva] = useState<string>("");
@@ -722,6 +723,24 @@ const VisualizarInventariosPage: React.FC = () => {
     });
   }, [inventarios, busquedaInventario, farmacias]);
 
+  // ✅ CRÍTICO: Filtrar items de inventarios por búsqueda (código, descripción, marca)
+  const itemsInventariosFiltrados = useMemo(() => {
+    if (!busquedaItemInventario.trim()) {
+      return itemsInventarios;
+    }
+
+    const busquedaLower = busquedaItemInventario.toLowerCase().trim();
+    return itemsInventarios.filter((item: any) => {
+      const codigo = (item.codigo || "").toLowerCase();
+      const descripcion = (item.descripcion || item.nombre || "").toLowerCase();
+      const marca = (item.marca || item.marca_producto || "").toLowerCase();
+      
+      return codigo.includes(busquedaLower) ||
+             descripcion.includes(busquedaLower) ||
+             marca.includes(busquedaLower);
+    });
+  }, [itemsInventarios, busquedaItemInventario]);
+
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1065,6 +1084,38 @@ const VisualizarInventariosPage: React.FC = () => {
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow-xl overflow-hidden">
+            {/* Buscador/Filtro de Items en Vista Inventarios */}
+            <div className="p-4 border-b bg-slate-50">
+              <div className="flex items-center gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
+                  <Input
+                    type="text"
+                    placeholder="Buscar productos por código, descripción o marca..."
+                    value={busquedaItemInventario}
+                    onChange={(e) => setBusquedaItemInventario(e.target.value)}
+                    className="pl-10 w-full"
+                  />
+                </div>
+                {busquedaItemInventario.trim() && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBusquedaItemInventario("")}
+                    className="flex items-center gap-2"
+                  >
+                    <X className="h-4 w-4" />
+                    Limpiar
+                  </Button>
+                )}
+              </div>
+              {busquedaItemInventario.trim() && (
+                <div className="mt-2 text-sm text-slate-600">
+                  {itemsInventariosFiltrados.length} producto(s) encontrado(s) de {itemsInventarios.length} total
+                </div>
+              )}
+            </div>
+            
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-slate-200">
                 <thead className="bg-slate-100">
@@ -1100,7 +1151,7 @@ const VisualizarInventariosPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-slate-200">
-                  {itemsInventarios.map((item: any, index: number) => {
+                  {itemsInventariosFiltrados.map((item: any, index: number) => {
                     const costo = Number(item.costo_unitario || item.costo || 0);
                     const utilidadPorcentaje = Number(item.utilidad_porcentaje || item.porcentaje_ganancia || item.porcentaje_utilidad || 0);
                     const cantidad = Number(item.cantidad || item.existencia || 0);
