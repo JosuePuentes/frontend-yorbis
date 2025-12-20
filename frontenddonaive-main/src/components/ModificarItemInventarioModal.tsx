@@ -69,6 +69,23 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
   const [precio, setPrecio] = useState<number>(0);
   const [porcentajeGanancia, setPorcentajeGanancia] = useState<number>(40.0); // Default 40%
   const [lotes, setLotes] = useState<Lote[]>([]);
+  const [aplicarTasaCambio, setAplicarTasaCambio] = useState(false);
+
+  // Leer tasa de cambio del localStorage
+  const obtenerDiferencialTasaCambio = (): number => {
+    try {
+      const dolarBcv = parseFloat(localStorage.getItem("tasaCambio_dolarBcv_verInventario") || "0");
+      const dolarNegro = parseFloat(localStorage.getItem("tasaCambio_dolarNegro_verInventario") || "0");
+      
+      if (dolarBcv > 0 && dolarNegro > 0) {
+        const diferencia = dolarNegro - dolarBcv;
+        return (diferencia / dolarBcv) * 100; // Retornar porcentaje
+      }
+      return 0;
+    } catch {
+      return 0;
+    }
+  };
 
   // Cargar todos los productos de la sucursal al abrir el modal
   useEffect(() => {
@@ -363,17 +380,28 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
   // Utilidad contable: el porcentaje se aplica sobre el precio de venta
   // Fórmula: Precio = Costo / (1 - % Ganancia / 100)
   // Ejemplo: Costo = $8, % Ganancia = 40% → Precio = $8 / (1 - 0.40) = $8 / 0.60 = $13.33
+  // ✅ Si aplica tasa de cambio: Costo ajustado = Costo + (Costo × % Diferencial)
   useEffect(() => {
-    if (costo > 0 && porcentajeGanancia >= 0 && porcentajeGanancia < 100) {
-      const nuevoPrecio = costo / (1 - porcentajeGanancia / 100);
-      setPrecio(Number(nuevoPrecio.toFixed(2)));
-    } else if (costo > 0 && porcentajeGanancia >= 100) {
-      // Si el porcentaje es 100% o más, no se puede calcular (división por cero o negativa)
-      setPrecio(costo);
-    } else if (costo > 0) {
-      setPrecio(costo);
+    // ✅ Calcular costo ajustado si aplica tasa de cambio
+    let costoAjustado = costo;
+    if (aplicarTasaCambio && costo > 0) {
+      const diferencialPorcentaje = obtenerDiferencialTasaCambio();
+      if (diferencialPorcentaje > 0) {
+        costoAjustado = costo * (1 + diferencialPorcentaje / 100);
+      }
     }
-  }, [costo, porcentajeGanancia]);
+
+    // Calcular precio usando costo ajustado
+    if (costoAjustado > 0 && porcentajeGanancia >= 0 && porcentajeGanancia < 100) {
+      const nuevoPrecio = costoAjustado / (1 - porcentajeGanancia / 100);
+      setPrecio(Number(nuevoPrecio.toFixed(2)));
+    } else if (costoAjustado > 0 && porcentajeGanancia >= 100) {
+      // Si el porcentaje es 100% o más, no se puede calcular (división por cero o negativa)
+      setPrecio(costoAjustado);
+    } else if (costoAjustado > 0) {
+      setPrecio(costoAjustado);
+    }
+  }, [costo, porcentajeGanancia, aplicarTasaCambio]);
 
   const handleGuardar = async () => {
     if (!productoSeleccionado) {
@@ -408,6 +436,16 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
         throw new Error("No se pudo identificar el item. El código del producto es requerido.");
       }
 
+      // ✅ Aplicar tasa de cambio al costo si está activada
+      let costoFinal = Number(costo);
+      if (aplicarTasaCambio && costoFinal > 0) {
+        const diferencialPorcentaje = obtenerDiferencialTasaCambio();
+        if (diferencialPorcentaje > 0) {
+          costoFinal = costoFinal * (1 + diferencialPorcentaje / 100);
+          console.log(`💰 [TASA_CAMBIO] Costo original: $${costo}, Diferencial: ${diferencialPorcentaje.toFixed(2)}%, Costo ajustado: $${costoFinal.toFixed(2)}`);
+        }
+      }
+
       const res = await fetch(`${API_BASE_URL}/inventarios/${inventarioId}/items/${encodeURIComponent(codigoProducto)}`, {
         method: "PATCH",
         headers: {
@@ -418,9 +456,9 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
           codigo: codigo.trim(),
           descripcion: descripcion.trim(),
           marca: marca.trim(),
-          costo_unitario: Number(costo), // El backend espera costo_unitario
+          costo_unitario: costoFinal, // ✅ Usar costo ajustado si aplica tasa de cambio
           cantidad: Number(existencia), // El backend espera cantidad (no existencia)
-          precio_unitario: Number(precio), // El backend espera precio_unitario
+          precio_unitario: Number(precio), // El backend espera precio_unitario (ya calculado con costo ajustado)
           porcentaje_ganancia: porcentajeGanancia,
           lotes: lotes.filter(l => l.lote.trim() !== "" && l.fecha_vencimiento !== ""), // Filtrar lotes vacíos
         }),
@@ -450,6 +488,7 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
         setPrecio(0);
         setPorcentajeGanancia(0);
         setLotes([]);
+        setAplicarTasaCambio(false);
         setError(null);
         setSuccess(false);
       }, 500);
@@ -467,13 +506,14 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
     setCodigo("");
     setDescripcion("");
     setMarca("");
-    setCosto(0);
-    setExistencia(0);
-    setPrecio(0);
-    setPorcentajeGanancia(0);
-    setError(null);
-    setSuccess(false);
-    onClose();
+        setCosto(0);
+        setExistencia(0);
+        setPrecio(0);
+        setPorcentajeGanancia(0);
+        setAplicarTasaCambio(false);
+        setError(null);
+        setSuccess(false);
+        onClose();
   };
 
   return (
@@ -645,9 +685,53 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
                   step="0.01"
                   min="0"
                   value={costo}
-                  onChange={(e) => setCosto(Number(e.target.value))}
+                  onChange={(e) => {
+                    const nuevoCosto = Number(e.target.value);
+                    setCosto(nuevoCosto);
+                    // Si se ingresa un costo nuevo, preguntar si aplica tasa de cambio
+                    if (nuevoCosto > 0 && !aplicarTasaCambio) {
+                      const diferencial = obtenerDiferencialTasaCambio();
+                      if (diferencial > 0) {
+                        const aplicar = window.confirm(
+                          `¿Aplicar tasa de cambio al costo de este producto?\n\n` +
+                          `Costo ingresado: $${nuevoCosto.toFixed(2)}\n` +
+                          `Diferencial: ${diferencial.toFixed(2)}%\n` +
+                          `Costo ajustado: $${(nuevoCosto * (1 + diferencial / 100)).toFixed(2)}`
+                        );
+                        setAplicarTasaCambio(aplicar);
+                      }
+                    }
+                  }}
                   placeholder="0.00"
                 />
+                {/* ✅ Checkbox para aplicar tasa de cambio */}
+                <div className="flex items-center gap-2 mt-2 p-2 bg-blue-50 rounded-md border border-blue-200">
+                  <input
+                    type="checkbox"
+                    id="aplicarTasaCambioEditar"
+                    checked={aplicarTasaCambio}
+                    onChange={(e) => setAplicarTasaCambio(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <label htmlFor="aplicarTasaCambioEditar" className="text-sm font-medium text-slate-700 cursor-pointer">
+                    Aplicar Tasa de Cambio
+                  </label>
+                  {aplicarTasaCambio && obtenerDiferencialTasaCambio() > 0 && (
+                    <span className="text-xs text-blue-600 ml-2">
+                      (Diferencial: {obtenerDiferencialTasaCambio().toFixed(2)}%)
+                    </span>
+                  )}
+                </div>
+                {aplicarTasaCambio && obtenerDiferencialTasaCambio() > 0 && costo > 0 && (
+                  <div className="mt-2 p-2 bg-green-50 rounded-md border border-green-200 text-sm">
+                    <p className="text-slate-700">
+                      <strong>Costo original:</strong> ${costo.toFixed(2)}
+                    </p>
+                    <p className="text-slate-700">
+                      <strong>Costo ajustado:</strong> ${(costo * (1 + obtenerDiferencialTasaCambio() / 100)).toFixed(2)}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div>
