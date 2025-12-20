@@ -99,7 +99,7 @@ const ResumenVentaDiariaPage: React.FC = () => {
   }, []);
 
   // Cargar ventas
-  const cargarVentas = async () => {
+  const cargarVentas = async (sinFiltroFecha: boolean = false) => {
     if (!sucursalSeleccionada) {
       console.warn("⚠️ [RESUMEN_VENTA] No hay sucursal seleccionada");
       return;
@@ -108,16 +108,22 @@ const ResumenVentaDiariaPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const url = `${API_BASE_URL}/punto-venta/ventas/usuario?sucursal=${sucursalSeleccionada}&limit=10000&fecha_inicio=${fechaDesde}&fecha_fin=${fechaHasta}`;
+      // ✅ Si no hay resultados, probar sin filtro de fecha
+      const url = sinFiltroFecha
+        ? `${API_BASE_URL}/punto-venta/ventas/usuario?sucursal=${sucursalSeleccionada}&limit=10000`
+        : `${API_BASE_URL}/punto-venta/ventas/usuario?sucursal=${sucursalSeleccionada}&limit=10000&fecha_inicio=${fechaDesde}&fecha_fin=${fechaHasta}`;
+      
       console.log("🔍 [RESUMEN_VENTA] Cargando ventas:");
       console.log("   URL:", url);
       console.log("   Sucursal:", sucursalSeleccionada);
-      console.log("   Fecha desde:", fechaDesde);
-      console.log("   Fecha hasta:", fechaHasta);
+      console.log("   Fecha desde:", sinFiltroFecha ? "SIN FILTRO" : fechaDesde);
+      console.log("   Fecha hasta:", sinFiltroFecha ? "SIN FILTRO" : fechaHasta);
+      console.log("   Modo:", sinFiltroFecha ? "SIN FILTRO DE FECHA (prueba)" : "CON FILTRO DE FECHA");
       
       const res = await fetchWithAuth(url);
       
       console.log("📡 [RESUMEN_VENTA] Respuesta HTTP:", res.status, res.statusText);
+      console.log("📡 [RESUMEN_VENTA] Headers:", Object.fromEntries(res.headers.entries()));
       
       if (!res.ok) {
         const errorText = await res.text();
@@ -126,22 +132,49 @@ const ResumenVentaDiariaPage: React.FC = () => {
       }
       
       const data = await res.json();
-      console.log("📦 [RESUMEN_VENTA] Datos recibidos del backend:", data);
+      console.log("📦 [RESUMEN_VENTA] Datos recibidos del backend (RAW):", JSON.stringify(data, null, 2));
       console.log("📦 [RESUMEN_VENTA] Tipo de datos:", Array.isArray(data) ? "Array" : typeof data);
+      console.log("📦 [RESUMEN_VENTA] Es array?:", Array.isArray(data));
+      console.log("📦 [RESUMEN_VENTA] Tiene facturas?:", data.facturas ? "Sí" : "No");
+      console.log("📦 [RESUMEN_VENTA] Tiene ventas?:", data.ventas ? "Sí" : "No");
+      console.log("📦 [RESUMEN_VENTA] Tiene data?:", data.data ? "Sí" : "No");
       
       const ventasArray = Array.isArray(data) ? data : (data.facturas || data.ventas || data.data || []);
       
       console.log(`✅ [RESUMEN_VENTA] Ventas cargadas: ${ventasArray.length}`);
+      
       if (ventasArray.length > 0) {
-        console.log(`📊 [RESUMEN_VENTA] Ejemplo de venta:`, ventasArray[0]);
+        console.log(`📊 [RESUMEN_VENTA] ✅ ENCONTRADAS ${ventasArray.length} VENTAS`);
+        console.log(`📊 [RESUMEN_VENTA] Ejemplo de venta (primera):`, JSON.stringify(ventasArray[0], null, 2));
         console.log(`📊 [RESUMEN_VENTA] Estado de la venta:`, ventasArray[0].estado);
         console.log(`📊 [RESUMEN_VENTA] Número de factura:`, ventasArray[0].numero_factura || ventasArray[0].numeroFactura);
         console.log(`📊 [RESUMEN_VENTA] Items/Productos:`, ventasArray[0].items || ventasArray[0].productos);
+        console.log(`📊 [RESUMEN_VENTA] Fecha de la venta:`, ventasArray[0].fecha || ventasArray[0].fechaCreacion);
+        console.log(`📊 [RESUMEN_VENTA] Sucursal de la venta:`, ventasArray[0].sucursal || ventasArray[0].farmacia);
+        
+        // ✅ Mostrar todas las ventas con sus estados
+        console.log(`📊 [RESUMEN_VENTA] Estados de todas las ventas:`, ventasArray.map((v: any) => ({
+          id: v._id,
+          estado: v.estado,
+          fecha: v.fecha || v.fechaCreacion,
+          sucursal: v.sucursal || v.farmacia,
+          tieneItems: !!(v.items || v.productos)
+        })));
       } else {
-        console.warn("⚠️ [RESUMEN_VENTA] No se encontraron ventas. Verificar:");
+        console.warn("⚠️ [RESUMEN_VENTA] ❌ NO SE ENCONTRARON VENTAS");
         console.warn("   1. ¿Existen ventas con estado 'procesada' en el backend?");
         console.warn("   2. ¿Las fechas son correctas? (fecha desde:", fechaDesde, "hasta:", fechaHasta, ")");
         console.warn("   3. ¿La sucursal es correcta?", sucursalSeleccionada);
+        console.warn("   4. ¿El backend está retornando datos? (revisar logs del backend)");
+        
+        // ✅ Si no hay resultados y no estamos en modo sin filtro, intentar sin filtro de fecha
+        if (!sinFiltroFecha) {
+          console.log("🔄 [RESUMEN_VENTA] Intentando cargar sin filtro de fecha...");
+          setTimeout(() => {
+            cargarVentas(true);
+          }, 1000);
+          return;
+        }
       }
       
       // ✅ Validar que las ventas tengan items o productos (el backend puede usar cualquiera)
@@ -153,7 +186,12 @@ const ResumenVentaDiariaPage: React.FC = () => {
         }
         return tieneItems;
       });
-      console.log(`✅ [RESUMEN_VENTA] Ventas con items: ${ventasConItems.length}`);
+      console.log(`✅ [RESUMEN_VENTA] Ventas con items: ${ventasConItems.length} de ${ventasArray.length}`);
+      
+      if (ventasArray.length > 0 && ventasConItems.length === 0) {
+        console.error("❌ [RESUMEN_VENTA] PROBLEMA: Hay ventas pero ninguna tiene items/productos");
+        console.error("   Esto puede indicar que el backend no está retornando los items correctamente");
+      }
       
       // ✅ Normalizar campo items/productos para consistencia
       const ventasNormalizadas = ventasConItems.map((v: any) => ({
@@ -165,6 +203,7 @@ const ResumenVentaDiariaPage: React.FC = () => {
       setVentas(ventasNormalizadas);
     } catch (err: any) {
       console.error("❌ [RESUMEN_VENTA] Error al cargar ventas:", err);
+      console.error("❌ [RESUMEN_VENTA] Stack:", err.stack);
       setError(err.message || "Error al cargar ventas");
       setVentas([]);
     } finally {
@@ -317,12 +356,22 @@ const ResumenVentaDiariaPage: React.FC = () => {
             <Button
               onClick={() => {
                 console.log("🔄 [RESUMEN_VENTA] Recargando ventas manualmente...");
-                cargarVentas();
+                cargarVentas(false);
               }}
               className="flex items-center gap-2"
               variant="outline"
             >
               🔄 Recargar
+            </Button>
+            <Button
+              onClick={() => {
+                console.log("🔍 [RESUMEN_VENTA] Probando sin filtro de fecha...");
+                cargarVentas(true);
+              }}
+              className="flex items-center gap-2"
+              variant="outline"
+            >
+              🔍 Sin Filtro Fecha
             </Button>
             <Button
               onClick={handleExportarExcel}
