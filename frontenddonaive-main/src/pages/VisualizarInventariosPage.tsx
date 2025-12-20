@@ -1549,59 +1549,24 @@ const VisualizarInventariosPage: React.FC = () => {
                       console.log("🗑️ [ELIMINAR] Intentando eliminar producto:", {
                         producto_id: productoAEliminar._id,
                         codigo: productoAEliminar.codigo,
-                        inventario_id: productoAEliminar.inventario_id,
-                        sucursal_id: productoAEliminar.sucursal_id,
-                        farmacia: productoAEliminar.farmacia
+                        inventario_id: productoAEliminar.inventario_id
                       });
 
                       if (!productoAEliminar.codigo) {
                         throw new Error("El producto no tiene código, no se puede eliminar");
                       }
 
-                      // ✅ CRÍTICO: Buscar el inventario correcto basado en la farmacia del producto
-                      // El producto puede tener sucursal_id, farmacia, o estar en cualquier inventario de la misma farmacia
-                      const farmaciaProducto = productoAEliminar.sucursal_id || productoAEliminar.farmacia || productoAEliminar.sucursal_nombre;
-                      
-                      console.log(`🔍 [ELIMINAR] Buscando inventarios para farmacia: ${farmaciaProducto}`);
-                      
-                      // Buscar todos los inventarios que pertenecen a la misma farmacia
-                      const inventariosFarmacia = inventarios.filter((inv: any) => {
-                        const invFarmacia = inv.farmacia || inv.sucursal_id;
-                        const invFarmaciaNombre = farmacias.find(f => f.id === invFarmacia)?.nombre;
-                        
-                        // Comparar por ID o por nombre
-                        return invFarmacia === farmaciaProducto || 
-                               invFarmaciaNombre === farmaciaProducto ||
-                               invFarmacia === productoAEliminar.sucursal_id ||
-                               invFarmacia === productoAEliminar.farmacia;
-                      });
-                      
-                      console.log(`🔍 [ELIMINAR] Inventarios encontrados para la farmacia: ${inventariosFarmacia.length}`);
-                      
-                      if (inventariosFarmacia.length === 0) {
-                        // Si no se encuentra por farmacia, buscar en todos los inventarios activos
-                        console.log("⚠️ [ELIMINAR] No se encontró por farmacia, buscando en todos los inventarios activos...");
-                        const inventariosActivos = inventarios.filter((inv: any) => 
-                          !inv.estado || inv.estado === "activo"
-                        );
-                        inventariosFarmacia.push(...inventariosActivos);
-                      }
-                      
-                      // Intentar eliminar desde cada inventario hasta que funcione
+                      // ✅ SIMPLIFICADO: Como TODO es de la misma sucursal, buscar en TODOS los inventarios sin restricciones
+                      // Intentar eliminar desde TODOS los inventarios hasta que funcione
                       let eliminado = false;
                       let ultimoError: string | null = null;
                       
-                      for (const inventario of inventariosFarmacia) {
-                        const inventarioAny = inventario as any;
-                        const inventarioId = inventarioAny._id || inventarioAny.id;
-                        if (!inventarioId) continue;
-                        
-                        console.log(`🗑️ [ELIMINAR] Intentando eliminar desde inventario ${inventarioId} (farmacia: ${inventarioAny.farmacia})`);
-                        
+                      // Primero intentar con el inventario_id del producto si existe
+                      if (productoAEliminar.inventario_id) {
+                        console.log(`🗑️ [ELIMINAR] Intentando primero con inventario_id del producto: ${productoAEliminar.inventario_id}`);
                         try {
-                          // Primero intentar por código (más confiable)
                           const resCodigo = await fetch(
-                            `${API_BASE_URL}/inventarios/${inventarioId}/items/codigo/${encodeURIComponent(productoAEliminar.codigo)}`,
+                            `${API_BASE_URL}/inventarios/${productoAEliminar.inventario_id}/items/codigo/${encodeURIComponent(productoAEliminar.codigo)}`,
                             {
                               method: "DELETE",
                               headers: {
@@ -1613,41 +1578,42 @@ const VisualizarInventariosPage: React.FC = () => {
                           
                           if (resCodigo.ok) {
                             eliminado = true;
-                            console.log(`✅ [ELIMINAR] Producto eliminado correctamente del inventario ${inventarioId}`);
-                            break;
+                            console.log(`✅ [ELIMINAR] Producto eliminado correctamente del inventario ${productoAEliminar.inventario_id}`);
                           } else {
                             const errorData = await resCodigo.json().catch(() => null);
                             const errorMsg = errorData?.detail || errorData?.message || `Error ${resCodigo.status}`;
-                            console.log(`⚠️ [ELIMINAR] No se pudo eliminar desde inventario ${inventarioId}: ${errorMsg}`);
-                            
-                            // Si el error indica que el producto pertenece a otra farmacia, guardar el mensaje pero continuar
-                            if (errorMsg.includes("pertenece a la farmacia")) {
-                              ultimoError = errorMsg;
-                              continue; // Intentar con el siguiente inventario
-                            }
-                            
-                            // Si es 404, el producto no está en este inventario, continuar
-                            if (resCodigo.status === 404) {
-                              continue;
-                            }
-                            
-                            // Para otros errores, guardar pero continuar
+                            console.log(`⚠️ [ELIMINAR] No se pudo eliminar desde inventario ${productoAEliminar.inventario_id}: ${errorMsg}`);
                             ultimoError = errorMsg;
                           }
                         } catch (fetchError: any) {
-                          console.error(`❌ [ELIMINAR] Error al intentar eliminar desde inventario ${inventarioId}:`, fetchError);
+                          console.error(`❌ [ELIMINAR] Error al intentar eliminar desde inventario ${productoAEliminar.inventario_id}:`, fetchError);
                           ultimoError = fetchError.message || "Error desconocido";
-                          continue;
                         }
                       }
                       
+                      // Si no se eliminó, intentar desde TODOS los inventarios (sin restricciones de farmacia)
                       if (!eliminado) {
-                        // Si no se eliminó, intentar con el inventario_id original si existe
-                        if (productoAEliminar.inventario_id && !eliminado) {
-                          console.log(`⚠️ [ELIMINAR] Intentando con inventario_id original: ${productoAEliminar.inventario_id}`);
+                        console.log("🔍 [ELIMINAR] Buscando en TODOS los inventarios (sin restricciones de farmacia)...");
+                        // Incluir todos los inventarios sin filtrar (todo es de la misma sucursal)
+                        const todosLosInventarios = [...inventarios];
+                        
+                        console.log(`🔍 [ELIMINAR] Intentando eliminar desde ${todosLosInventarios.length} inventarios`);
+                        
+                        for (const inventario of todosLosInventarios) {
+                          if (eliminado) break;
+                          
+                          const inventarioAny = inventario as any;
+                          const inventarioId = inventarioAny._id || inventarioAny.id;
+                          if (!inventarioId) continue;
+                          
+                          // Si ya intentamos con este inventario, saltarlo
+                          if (productoAEliminar.inventario_id === inventarioId) continue;
+                          
+                          console.log(`🗑️ [ELIMINAR] Intentando eliminar desde inventario ${inventarioId}`);
+                          
                           try {
                             const resCodigo = await fetch(
-                              `${API_BASE_URL}/inventarios/${productoAEliminar.inventario_id}/items/codigo/${encodeURIComponent(productoAEliminar.codigo)}`,
+                              `${API_BASE_URL}/inventarios/${inventarioId}/items/codigo/${encodeURIComponent(productoAEliminar.codigo)}`,
                               {
                                 method: "DELETE",
                                 headers: {
@@ -1659,16 +1625,31 @@ const VisualizarInventariosPage: React.FC = () => {
                             
                             if (resCodigo.ok) {
                               eliminado = true;
-                              console.log("✅ [ELIMINAR] Producto eliminado usando inventario_id original");
+                              console.log(`✅ [ELIMINAR] Producto eliminado correctamente del inventario ${inventarioId}`);
+                              break;
+                            } else {
+                              const errorData = await resCodigo.json().catch(() => null);
+                              const errorMsg = errorData?.detail || errorData?.message || `Error ${resCodigo.status}`;
+                              
+                              // Si es 404, el producto no está en este inventario, continuar
+                              if (resCodigo.status === 404) {
+                                continue;
+                              }
+                              
+                              // Para otros errores, guardar pero continuar (puede ser error de farmacia, pero seguimos intentando)
+                              console.log(`⚠️ [ELIMINAR] Error desde inventario ${inventarioId}: ${errorMsg}`);
+                              if (!ultimoError) ultimoError = errorMsg;
                             }
-                          } catch (err) {
-                            console.error("❌ [ELIMINAR] Error con inventario_id original:", err);
+                          } catch (fetchError: any) {
+                            console.error(`❌ [ELIMINAR] Error al intentar eliminar desde inventario ${inventarioId}:`, fetchError);
+                            if (!ultimoError) ultimoError = fetchError.message || "Error desconocido";
+                            continue;
                           }
                         }
-                        
-                        if (!eliminado) {
-                          throw new Error(ultimoError || "No se pudo eliminar el producto. Verifique que existe en el inventario y que pertenece a la farmacia correcta.");
-                        }
+                      }
+                      
+                      if (!eliminado) {
+                        throw new Error(ultimoError || `No se pudo eliminar el producto con código "${productoAEliminar.codigo}". Se intentó desde todos los inventarios disponibles.`);
                       }
 
                       if (!eliminado) {
