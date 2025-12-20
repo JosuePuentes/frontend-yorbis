@@ -1549,81 +1549,105 @@ const VisualizarInventariosPage: React.FC = () => {
                       console.log("🗑️ [ELIMINAR] Intentando eliminar producto:", {
                         producto_id: productoAEliminar._id,
                         codigo: productoAEliminar.codigo,
-                        inventario_id: productoAEliminar.inventario_id
+                        inventario_id: productoAEliminar.inventario_id,
+                        sucursal_id: productoAEliminar.sucursal_id,
+                        farmacia: productoAEliminar.farmacia
                       });
 
-                      // ✅ CRÍTICO: Intentar eliminar desde el inventario
-                      let eliminado = false;
-                      
-                      if (productoAEliminar.inventario_id) {
-                        // Intentar eliminar por ID del item
-                        const itemId = productoAEliminar._id || productoAEliminar.id;
-                        const inventarioId = productoAEliminar.inventario_id;
-                        
-                        console.log(`🗑️ [ELIMINAR] Eliminando item ${itemId} del inventario ${inventarioId}`);
-                        
-                        // Intentar endpoint con ID
-                        try {
-                        const res = await fetch(
-                            `${API_BASE_URL}/inventarios/${inventarioId}/items/${itemId}`,
-                          {
-                            method: "DELETE",
-                            headers: {
-                              "Authorization": `Bearer ${token}`,
-                                "Content-Type": "application/json",
-                            },
-                          }
-                        );
+                      if (!productoAEliminar.codigo) {
+                        throw new Error("El producto no tiene código, no se puede eliminar");
+                      }
 
-                          if (res.ok) {
-                            eliminado = true;
-                            console.log("✅ [ELIMINAR] Producto eliminado correctamente del inventario");
-                          } else if (res.status === 404) {
-                            // Si no se encuentra por ID, intentar por código
-                            console.log("⚠️ [ELIMINAR] No se encontró por ID, intentando por código...");
-                            
-                            if (productoAEliminar.codigo) {
-                              const resCodigo = await fetch(
-                                `${API_BASE_URL}/inventarios/${inventarioId}/items/codigo/${encodeURIComponent(productoAEliminar.codigo)}`,
-                                {
-                                  method: "DELETE",
-                                  headers: {
-                                    "Authorization": `Bearer ${token}`,
-                                    "Content-Type": "application/json",
-                                  },
-                                }
-                              );
-                              
-                              if (resCodigo.ok) {
-                                eliminado = true;
-                                console.log("✅ [ELIMINAR] Producto eliminado por código");
-                              } else {
-                                const errorData = await resCodigo.json().catch(() => null);
-                                throw new Error(errorData?.detail || errorData?.message || `Error al eliminar producto: ${resCodigo.status}`);
-                              }
-                            }
-                          } else {
-                          const errorData = await res.json().catch(() => null);
-                            throw new Error(errorData?.detail || errorData?.message || `Error al eliminar producto: ${res.status}`);
-                          }
-                        } catch (fetchError: any) {
-                          console.error("❌ [ELIMINAR] Error en la petición:", fetchError);
-                          throw fetchError;
-                        }
-                      } else {
-                        // Si no tiene inventario_id, intentar buscar el inventario activo de la sucursal
-                        console.log("⚠️ [ELIMINAR] Producto no tiene inventario_id, buscando inventario activo...");
+                      // ✅ CRÍTICO: Buscar el inventario correcto basado en la farmacia del producto
+                      // El producto puede tener sucursal_id, farmacia, o estar en cualquier inventario de la misma farmacia
+                      const farmaciaProducto = productoAEliminar.sucursal_id || productoAEliminar.farmacia || productoAEliminar.sucursal_nombre;
+                      
+                      console.log(`🔍 [ELIMINAR] Buscando inventarios para farmacia: ${farmaciaProducto}`);
+                      
+                      // Buscar todos los inventarios que pertenecen a la misma farmacia
+                      const inventariosFarmacia = inventarios.filter((inv: any) => {
+                        const invFarmacia = inv.farmacia || inv.sucursal_id;
+                        const invFarmaciaNombre = farmacias.find(f => f.id === invFarmacia)?.nombre;
                         
-                        if (productoAEliminar.sucursal_id) {
-                          // Buscar inventario activo de la sucursal
-                          const inventarioActivo = inventarios.find((inv: any) => 
-                            (inv.farmacia === productoAEliminar.sucursal_id || inv.sucursal_id === productoAEliminar.sucursal_id) &&
-                            inv.estado === "activo"
+                        // Comparar por ID o por nombre
+                        return invFarmacia === farmaciaProducto || 
+                               invFarmaciaNombre === farmaciaProducto ||
+                               invFarmacia === productoAEliminar.sucursal_id ||
+                               invFarmacia === productoAEliminar.farmacia;
+                      });
+                      
+                      console.log(`🔍 [ELIMINAR] Inventarios encontrados para la farmacia: ${inventariosFarmacia.length}`);
+                      
+                      if (inventariosFarmacia.length === 0) {
+                        // Si no se encuentra por farmacia, buscar en todos los inventarios activos
+                        console.log("⚠️ [ELIMINAR] No se encontró por farmacia, buscando en todos los inventarios activos...");
+                        const inventariosActivos = inventarios.filter((inv: any) => 
+                          !inv.estado || inv.estado === "activo"
+                        );
+                        inventariosFarmacia.push(...inventariosActivos);
+                      }
+                      
+                      // Intentar eliminar desde cada inventario hasta que funcione
+                      let eliminado = false;
+                      let ultimoError: string | null = null;
+                      
+                      for (const inventario of inventariosFarmacia) {
+                        const inventarioAny = inventario as any;
+                        const inventarioId = inventarioAny._id || inventarioAny.id;
+                        if (!inventarioId) continue;
+                        
+                        console.log(`🗑️ [ELIMINAR] Intentando eliminar desde inventario ${inventarioId} (farmacia: ${inventarioAny.farmacia})`);
+                        
+                        try {
+                          // Primero intentar por código (más confiable)
+                          const resCodigo = await fetch(
+                            `${API_BASE_URL}/inventarios/${inventarioId}/items/codigo/${encodeURIComponent(productoAEliminar.codigo)}`,
+                            {
+                              method: "DELETE",
+                              headers: {
+                                "Authorization": `Bearer ${token}`,
+                                "Content-Type": "application/json",
+                              },
+                            }
                           );
                           
-                          if (inventarioActivo && productoAEliminar.codigo) {
+                          if (resCodigo.ok) {
+                            eliminado = true;
+                            console.log(`✅ [ELIMINAR] Producto eliminado correctamente del inventario ${inventarioId}`);
+                            break;
+                          } else {
+                            const errorData = await resCodigo.json().catch(() => null);
+                            const errorMsg = errorData?.detail || errorData?.message || `Error ${resCodigo.status}`;
+                            console.log(`⚠️ [ELIMINAR] No se pudo eliminar desde inventario ${inventarioId}: ${errorMsg}`);
+                            
+                            // Si el error indica que el producto pertenece a otra farmacia, guardar el mensaje pero continuar
+                            if (errorMsg.includes("pertenece a la farmacia")) {
+                              ultimoError = errorMsg;
+                              continue; // Intentar con el siguiente inventario
+                            }
+                            
+                            // Si es 404, el producto no está en este inventario, continuar
+                            if (resCodigo.status === 404) {
+                              continue;
+                            }
+                            
+                            // Para otros errores, guardar pero continuar
+                            ultimoError = errorMsg;
+                          }
+                        } catch (fetchError: any) {
+                          console.error(`❌ [ELIMINAR] Error al intentar eliminar desde inventario ${inventarioId}:`, fetchError);
+                          ultimoError = fetchError.message || "Error desconocido";
+                          continue;
+                        }
+                      }
+                      
+                      if (!eliminado) {
+                        // Si no se eliminó, intentar con el inventario_id original si existe
+                        if (productoAEliminar.inventario_id && !eliminado) {
+                          console.log(`⚠️ [ELIMINAR] Intentando con inventario_id original: ${productoAEliminar.inventario_id}`);
+                          try {
                             const resCodigo = await fetch(
-                              `${API_BASE_URL}/inventarios/${inventarioActivo._id}/items/codigo/${encodeURIComponent(productoAEliminar.codigo)}`,
+                              `${API_BASE_URL}/inventarios/${productoAEliminar.inventario_id}/items/codigo/${encodeURIComponent(productoAEliminar.codigo)}`,
                               {
                                 method: "DELETE",
                                 headers: {
@@ -1635,16 +1659,15 @@ const VisualizarInventariosPage: React.FC = () => {
                             
                             if (resCodigo.ok) {
                               eliminado = true;
-                              console.log("✅ [ELIMINAR] Producto eliminado del inventario activo");
-                            } else {
-                              const errorData = await resCodigo.json().catch(() => null);
-                              throw new Error(errorData?.detail || errorData?.message || "Error al eliminar producto del inventario activo");
+                              console.log("✅ [ELIMINAR] Producto eliminado usando inventario_id original");
                             }
-                          } else {
-                            throw new Error("No se encontró inventario activo para eliminar el producto");
+                          } catch (err) {
+                            console.error("❌ [ELIMINAR] Error con inventario_id original:", err);
                           }
-                        } else {
-                          throw new Error("No se puede eliminar: el producto no tiene inventario_id ni sucursal_id");
+                        }
+                        
+                        if (!eliminado) {
+                          throw new Error(ultimoError || "No se pudo eliminar el producto. Verifique que existe en el inventario y que pertenece a la farmacia correcta.");
                         }
                       }
 
