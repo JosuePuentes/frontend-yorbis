@@ -24,12 +24,15 @@ interface Venta {
   _id: string;
   numero_factura?: string;
   fecha: string;
+  fechaCreacion?: string; // Formato: "2025-01-15 10:30:00"
   items: ItemVenta[];
   cliente?: {
     _id?: string;
     nombre?: string;
     cedula?: string;
     correo?: string;
+    telefono?: string;
+    direccion?: string;
   };
   total_bs: number;
   total_usd: number;
@@ -38,6 +41,7 @@ interface Venta {
     nombre?: string;
   };
   cajero?: string;
+  estado?: string;
 }
 
 interface ProductoVendido {
