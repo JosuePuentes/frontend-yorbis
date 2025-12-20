@@ -2889,7 +2889,7 @@ const PuntoVentaPage: React.FC = () => {
                                         if (!nombreSucursal || nombreSucursal.trim() === '' || nombreSucursal === stockSucursal.sucursal_id || /^\d+$/.test(nombreSucursal)) {
                                           // Debug: ver qué datos tenemos
                                           if (index === 0) {
-                                            console.log("Stock por sucursal recibido:", stockSucursal);
+                                            console.log("Existencia por sucursal recibido:", stockSucursal);
                                             console.log("Lista de sucursales disponibles:", sucursales);
                                           }
                                           
@@ -2923,7 +2923,7 @@ const PuntoVentaPage: React.FC = () => {
                                             className={`p-2 rounded text-sm border ${
                                               esSucursalActual
                                                 ? 'bg-blue-50 border-blue-200'
-                                                : stockSuc > 0
+                                                : existenciaSuc > 0
                                                 ? 'bg-green-50 border-green-200'
                                                 : 'bg-red-50 border-red-200'
                                             }`}
@@ -2938,9 +2938,9 @@ const PuntoVentaPage: React.FC = () => {
                                                 )}
                                               </div>
                                               <div className={`font-semibold ${
-                                                stockSuc > 0 ? 'text-green-700' : 'text-red-700'
+                                                existenciaSuc > 0 ? 'text-green-700' : 'text-red-700'
                                               }`}>
-                                                {stockSuc}
+                                                {existenciaSuc}
                                               </div>
                                             </div>
                                           </div>
