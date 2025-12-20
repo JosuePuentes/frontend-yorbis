@@ -182,7 +182,6 @@ const VisualizarInventariosPage: React.FC = () => {
       const inicio = Date.now();
 
       // ✅ OPTIMIZACIÓN: Cargar solo desde punto de venta (tiene todos los productos y es más rápido)
-      const todosLosProductos: any[] = [];
       const productosUnicos = new Map<string, any>();
       
       try {
@@ -228,7 +227,7 @@ const VisualizarInventariosPage: React.FC = () => {
                   existencia: Number(producto.existencia || producto.cantidad || producto.stock || 0),
                   sucursal_id: sucursalId,
                 };
-              }).filter(p => p !== null);
+              }).filter((p: any) => p !== null);
             }
             return [];
           } catch (err) {
