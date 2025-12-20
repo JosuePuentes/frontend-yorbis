@@ -741,24 +741,6 @@ const VisualizarInventariosPage: React.FC = () => {
     });
   }, [itemsInventarios, busquedaItemInventario]);
 
-  // ✅ CRÍTICO: Filtrar items de inventarios por búsqueda (código, descripción, marca)
-  const itemsInventariosFiltrados = useMemo(() => {
-    if (!busquedaItemInventario.trim()) {
-      return itemsInventarios;
-    }
-
-    const busquedaLower = busquedaItemInventario.toLowerCase().trim();
-    return itemsInventarios.filter((item: any) => {
-      const codigo = (item.codigo || "").toLowerCase();
-      const descripcion = (item.descripcion || item.nombre || "").toLowerCase();
-      const marca = (item.marca || item.marca_producto || "").toLowerCase();
-      
-      return codigo.includes(busquedaLower) ||
-             descripcion.includes(busquedaLower) ||
-             marca.includes(busquedaLower);
-    });
-  }, [itemsInventarios, busquedaItemInventario]);
-
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
