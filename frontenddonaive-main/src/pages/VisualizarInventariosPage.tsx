@@ -6,7 +6,7 @@ import CargarExistenciasModal from "../components/CargarExistenciasModal";
 import CargarExistenciasMasivaModal from "../components/CargarExistenciasMasivaModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Download, Trash2, Edit, Eye, Search, Plus, Package } from "lucide-react";
+import { Download, Trash2, Edit, Eye, Search, Plus, Package, X } from "lucide-react";
 
 interface Inventario {
   _id: string;
@@ -52,6 +52,7 @@ const VisualizarInventariosPage: React.FC = () => {
   const [showEliminarProductoModal, setShowEliminarProductoModal] = useState(false);
   const [eliminandoProducto, setEliminandoProducto] = useState(false);
   const [showCargarExistenciasModal, setShowCargarExistenciasModal] = useState(false);
+  const [busquedaInventario, setBusquedaInventario] = useState(""); // Buscador para inventarios
   const [sucursalSeleccionadaParaCargar, setSucursalSeleccionadaParaCargar] = useState<string>("");
   const [showCargarExistenciasMasivaModal, setShowCargarExistenciasMasivaModal] = useState(false);
   const [sucursalSeleccionadaParaCargarMasiva, setSucursalSeleccionadaParaCargarMasiva] = useState<string>("");
@@ -646,13 +647,42 @@ const VisualizarInventariosPage: React.FC = () => {
     }
   };
 
-  // Ordenar inventarios por fecha más reciente primero
-  const inventariosFiltrados = inventarios
-    .sort((a, b) => {
+  // Filtrar y ordenar inventarios
+  const inventariosFiltrados = useMemo(() => {
+    let inventariosFiltrados = [...inventarios];
+    
+    // Aplicar filtro de búsqueda si existe
+    if (busquedaInventario.trim()) {
+      const busquedaLower = busquedaInventario.toLowerCase().trim();
+      inventariosFiltrados = inventariosFiltrados.filter((inventario => {
+        // Buscar por fecha
+        const fecha = (inventario.fecha || "").toLowerCase();
+        if (fecha.includes(busquedaLower)) return true;
+        
+        // Buscar por sucursal/farmacia
+        const farmaciaId = (inventario.farmacia || "").toLowerCase();
+        const farmaciaNombre = farmacias.find(f => f.id === inventario.farmacia)?.nombre || "";
+        if (farmaciaId.includes(busquedaLower) || farmaciaNombre.toLowerCase().includes(busquedaLower)) return true;
+        
+        // Buscar por usuario
+        const usuario = (inventario.usuarioCorreo || "").toLowerCase();
+        if (usuario.includes(busquedaLower)) return true;
+        
+        // Buscar por costo
+        const costo = String(inventario.costo || 0);
+        if (costo.includes(busquedaLower)) return true;
+        
+        return false;
+      }));
+    }
+    
+    // Ordenar por fecha más reciente primero
+    return inventariosFiltrados.sort((a, b) => {
       const fechaA = a.fecha || "";
       const fechaB = b.fecha || "";
       return fechaB.localeCompare(fechaA);
     });
+  }, [inventarios, busquedaInventario, farmacias]);
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
@@ -705,6 +735,42 @@ const VisualizarInventariosPage: React.FC = () => {
           </div>
         </div>
         
+        {/* Buscador/Filtro de Inventarios - Solo mostrar si no está en vista tabla */}
+        {!vistaTabla && (
+          <div className="mb-6">
+            <div className="bg-white rounded-lg shadow-md p-4">
+              <div className="flex items-center gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
+                  <Input
+                    type="text"
+                    placeholder="Buscar por fecha, sucursal, usuario o costo..."
+                    value={busquedaInventario}
+                    onChange={(e) => setBusquedaInventario(e.target.value)}
+                    className="pl-10 w-full"
+                  />
+                </div>
+                {busquedaInventario.trim() && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBusquedaInventario("")}
+                    className="flex items-center gap-2"
+                  >
+                    <X className="h-4 w-4" />
+                    Limpiar
+                  </Button>
+                )}
+              </div>
+              {busquedaInventario.trim() && (
+                <div className="mt-2 text-sm text-slate-600">
+                  {inventariosFiltrados.length} inventario(s) encontrado(s)
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Componente para subir inventario desde Excel - Solo mostrar si no está en vista tabla */}
         {!vistaTabla && (
         <UploadInventarioExcel
