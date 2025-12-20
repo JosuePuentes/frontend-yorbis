@@ -114,11 +114,21 @@ const ResumenVentaDiariaPage: React.FC = () => {
       console.log(`✅ [RESUMEN_VENTA] Ventas cargadas: ${ventasArray.length}`);
       console.log(`📊 [RESUMEN_VENTA] Ejemplo de venta:`, ventasArray[0]);
       
-      // Validar que las ventas tengan items
-      const ventasConItems = ventasArray.filter((v: any) => v.items && Array.isArray(v.items) && v.items.length > 0);
+      // ✅ Validar que las ventas tengan items o productos (el backend puede usar cualquiera)
+      const ventasConItems = ventasArray.filter((v: any) => {
+        const items = v.items || v.productos || [];
+        return Array.isArray(items) && items.length > 0;
+      });
       console.log(`✅ [RESUMEN_VENTA] Ventas con items: ${ventasConItems.length}`);
       
-      setVentas(ventasConItems);
+      // ✅ Normalizar campo items/productos para consistencia
+      const ventasNormalizadas = ventasConItems.map((v: any) => ({
+        ...v,
+        items: v.items || v.productos || [], // ✅ Asegurar que siempre use "items"
+        numero_factura: v.numero_factura || v.numeroFactura || v._id, // ✅ Normalizar número de factura
+      }));
+      
+      setVentas(ventasNormalizadas);
     } catch (err: any) {
       console.error("❌ [RESUMEN_VENTA] Error al cargar ventas:", err);
       setError(err.message || "Error al cargar ventas");
@@ -139,7 +149,9 @@ const ResumenVentaDiariaPage: React.FC = () => {
     const productos: ProductoVendido[] = [];
     
       ventas.forEach((venta) => {
-      if (!venta.items || !Array.isArray(venta.items)) return;
+      // ✅ Manejar tanto "items" como "productos" (el backend puede usar cualquiera)
+      const itemsVenta = venta.items || venta.productos || [];
+      if (!Array.isArray(itemsVenta) || itemsVenta.length === 0) return;
       
       // Manejar diferentes formatos de fecha del backend
       let fechaVenta: string;
@@ -156,18 +168,20 @@ const ResumenVentaDiariaPage: React.FC = () => {
       }
       
       const clienteNombre = venta.cliente?.nombre || "Sin cliente";
+      // ✅ Manejar tanto numero_factura como numeroFactura (el backend puede usar cualquiera)
+      const numeroFactura = venta.numero_factura || venta.numeroFactura || venta._id;
       
-      venta.items.forEach((item) => {
+      itemsVenta.forEach((item: any) => {
         productos.push({
           fecha: fechaVenta,
           codigo: item.codigo || item.producto_id || "N/A",
           descripcion: item.descripcion || item.nombre || "Sin descripción",
           marca: item.marca || "Sin marca",
-          precio_venta: item.precio_unitario || item.precio_unitario_usd || 0,
+          precio_venta: item.precio_unitario || item.precio_unitario_usd || item.precio || 0,
           cantidad: item.cantidad || 0,
-          subtotal: item.subtotal || item.subtotal_usd || (item.precio_unitario || 0) * (item.cantidad || 0),
+          subtotal: item.subtotal || item.subtotal_usd || (item.precio_unitario || item.precio || 0) * (item.cantidad || 0),
           cliente: clienteNombre,
-          numero_factura: venta.numero_factura || venta._id
+          numero_factura: numeroFactura
         });
       });
     });
