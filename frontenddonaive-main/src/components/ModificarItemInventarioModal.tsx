@@ -26,6 +26,10 @@ interface Producto {
   costo_unitario?: number; // Campo usado por el backend
   existencia?: number;
   cantidad?: number; // Campo usado por el backend
+  utilidad?: number; // Utilidad en dinero
+  utilidad_porcentaje?: number; // Porcentaje de utilidad (40% por defecto)
+  porcentaje_ganancia?: number; // Alias de utilidad_porcentaje
+  porcentaje_utilidad?: number; // Alias de utilidad_porcentaje
   lotes?: Lote[]; // Array de lotes con fechas de vencimiento
   sucursal?: string;
 }
