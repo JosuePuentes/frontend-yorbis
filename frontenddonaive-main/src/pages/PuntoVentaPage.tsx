@@ -451,22 +451,33 @@ const PuntoVentaPage: React.FC = () => {
                       itemsArray.forEach((item: any) => {
                         const itemId = item._id || item.id;
                         const codigo = item.codigo || item.codigo_producto;
+                        // ✅ CRÍTICO: Prioridad: cantidad > existencia > stock (según estructura del inventario)
                         const existenciaReal = Number(item.cantidad || item.existencia || item.stock || 0);
                         
-                        if (itemId) existenciaRealMap.set(itemId, existenciaReal);
-                        if (codigo) existenciaRealMap.set(codigo, existenciaReal);
+                        // Mapear por ID (convertir a string para asegurar coincidencia)
+                        if (itemId) {
+                          existenciaRealMap.set(String(itemId), existenciaReal);
+                        }
+                        // Mapear por código
+                        if (codigo) {
+                          existenciaRealMap.set(String(codigo), existenciaReal);
+                        }
                       });
+                      
+                      console.log(`🔍 [PUNTO_VENTA] Mapa de existencia creado. Ejemplo de claves:`, Array.from(existenciaRealMap.keys()).slice(0, 5));
 
                       console.log(`✅ [PUNTO_VENTA] Mapa de existencia real creado con ${existenciaRealMap.size} productos`);
 
                       // Actualizar productos con existencia real del inventario
                       const productosNormalizados = productosArray.map((producto: any) => {
-                        // Buscar existencia real en el mapa
-                        const existenciaReal = existenciaRealMap.get(producto.id || producto._id) || 
-                                             existenciaRealMap.get(producto.codigo) ||
+                        // Buscar existencia real en el mapa (por ID o código)
+                        const productoId = String(producto.id || producto._id || "");
+                        const productoCodigo = String(producto.codigo || "");
+                        const existenciaReal = existenciaRealMap.get(productoId) || 
+                                             existenciaRealMap.get(productoCodigo) ||
                                              producto.existencia ?? producto.cantidad ?? producto.stock ?? 0;
                         
-                        console.log(`📊 [PUNTO_VENTA] Producto ${producto.codigo}: existencia del backend=${producto.existencia}, existencia real=${existenciaReal}`);
+                        console.log(`📊 [PUNTO_VENTA] Producto ${productoCodigo} (ID: ${productoId}): existencia del backend=${producto.existencia}, existencia real del inventario=${existenciaReal}`);
                         
                         return {
                           ...producto,
@@ -1086,10 +1097,10 @@ const PuntoVentaPage: React.FC = () => {
   };
 
   const handleSeleccionarProducto = (producto: Producto) => {
-    // Verificar que el producto tenga stock antes de seleccionarlo
-    const stock = producto.cantidad ?? producto.stock ?? 0;
-    if (stock <= 0) {
-      alert("Este producto no tiene stock disponible");
+    // ✅ CRÍTICO: Verificar existencia real (campo principal que viene del inventario)
+    const existencia = producto.existencia ?? producto.cantidad ?? producto.stock ?? 0;
+    if (existencia <= 0) {
+      alert("Este producto no tiene existencia disponible");
       return;
     }
     setProductoSeleccionado(producto);
@@ -3291,10 +3302,11 @@ const PuntoVentaPage: React.FC = () => {
                   )}
                 </div>
                 {(() => {
-                  const stockDisponible = productoSeleccionado.cantidad ?? productoSeleccionado.stock ?? 0;
+                  // ✅ CRÍTICO: Usar existencia primero (campo principal que viene del inventario real)
+                  const existenciaDisponible = productoSeleccionado.existencia ?? productoSeleccionado.cantidad ?? productoSeleccionado.stock ?? 0;
                   return (
                     <div className="text-sm text-gray-500">
-                      Stock disponible: {stockDisponible}
+                      Existencia disponible: {existenciaDisponible}
                     </div>
                   );
                 })()}
