@@ -2085,9 +2085,14 @@ const PuntoVentaPage: React.FC = () => {
         // Si hay una búsqueda activa, refrescar los productos encontrados
         const busquedaActual = busquedaItem;
         setBusquedaItem(""); // Limpiar temporalmente
+        setProductosEncontrados([]); // Limpiar productos encontrados
+        
+        // ✅ CRÍTICO: Esperar más tiempo para que el backend actualice el inventario
+        // El backend debe descontar la cantidad del inventario antes de que refresquemos
         setTimeout(() => {
+          console.log("🔄 [PUNTO_VENTA] Refrescando búsqueda después de venta...");
           setBusquedaItem(busquedaActual); // Restaurar búsqueda para refrescar con existencia actualizada
-        }, 500); // Aumentar delay para dar tiempo al backend de actualizar
+        }, 1500); // Aumentar delay a 1.5 segundos para dar tiempo al backend
       } else {
         // Si no hay búsqueda, limpiar productos encontrados
         setProductosEncontrados([]);

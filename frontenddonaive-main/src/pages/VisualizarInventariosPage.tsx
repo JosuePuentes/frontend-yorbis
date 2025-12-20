@@ -383,7 +383,7 @@ const VisualizarInventariosPage: React.FC = () => {
     }
   }, [vistaTabla]);
 
-  // Filtrar productos según búsqueda (solo por código y descripción)
+  // Filtrar productos según búsqueda (código, descripción y marca)
   const productosFiltrados = useMemo(() => {
     if (!busquedaProducto.trim()) {
       return todosLosProductos;
@@ -392,10 +392,12 @@ const VisualizarInventariosPage: React.FC = () => {
     const busquedaLower = busquedaProducto.toLowerCase().trim();
     return todosLosProductos.filter((producto: any) => {
       const codigo = (producto.codigo || "").toLowerCase();
-      const descripcion = (producto.descripcion || "").toLowerCase();
+      const descripcion = (producto.descripcion || producto.nombre || "").toLowerCase();
+      const marca = (producto.marca || producto.marca_producto || "").toLowerCase();
       
       return codigo.includes(busquedaLower) ||
-             descripcion.includes(busquedaLower);
+             descripcion.includes(busquedaLower) ||
+             marca.includes(busquedaLower);
     });
   }, [todosLosProductos, busquedaProducto]);
 
