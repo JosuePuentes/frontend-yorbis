@@ -39,11 +39,9 @@ const VisualizarInventariosPage: React.FC = () => {
   const [inventarioParaVer, setInventarioParaVer] = useState<Inventario | null>(null);
   const [refreshItemsTrigger, setRefreshItemsTrigger] = useState(0);
   const [totalesExistencias, setTotalesExistencias] = useState<{ [key: string]: number }>({});
-  const [totalesCostoInventario, setTotalesCostoInventario] = useState<{ [key: string]: number }>({});
   const [totalesUtilidadInventario, setTotalesUtilidadInventario] = useState<{ [key: string]: number }>({});
   const [costosPromedioInventario, setCostosPromedioInventario] = useState<{ [key: string]: number }>({});
   const [descuentosPorInventario, setDescuentosPorInventario] = useState<{ [key: string]: number }>({});
-  const [guardandoDescuento, setGuardandoDescuento] = useState<{ [key: string]: boolean }>({});
   
   // Estados para la vista de productos
   const [todosLosProductos, setTodosLosProductos] = useState<any[]>([]);
@@ -384,7 +382,6 @@ const VisualizarInventariosPage: React.FC = () => {
         // Si no hay inventarios, limpiar totales
         if (!cancelado) {
           setTotalesExistencias({});
-          setTotalesCostoInventario({});
           setTotalesUtilidadInventario({});
           setCostosPromedioInventario({});
         }
@@ -395,7 +392,6 @@ const VisualizarInventariosPage: React.FC = () => {
       if (!token) return;
 
       const nuevosTotalesExistencias: { [key: string]: number } = {};
-      const nuevosTotalesCosto: { [key: string]: number } = {};
       const nuevosTotalesUtilidad: { [key: string]: number } = {};
       const nuevosCostosPromedio: { [key: string]: number } = {};
       
@@ -419,18 +415,6 @@ const VisualizarInventariosPage: React.FC = () => {
                 return sum + cantidadNum;
               }, 0);
               nuevosTotalesExistencias[inventario._id] = totalExistencias;
-              
-              // Calcular costo total del inventario: suma de (cantidad × costo_unitario) de todos los items
-              const costoTotal = items.reduce((sum, item: any) => {
-                const cantidad = item.cantidad ?? item.existencia ?? 0;
-                const costo = item.costo_unitario ?? item.costo ?? 0;
-                const cantidadNum = cantidad !== null && cantidad !== undefined ? Number(cantidad) : 0;
-                const costoNum = costo !== null && costo !== undefined ? Number(costo) : 0;
-                if (isNaN(cantidadNum) || isNaN(costoNum)) return sum;
-                const subtotal = cantidadNum * costoNum;
-                return sum + subtotal;
-              }, 0);
-              nuevosTotalesCosto[inventario._id] = costoTotal;
               
               // Calcular utilidad total: suma de (utilidad × cantidad) de todos los items
               // Utilidad = precio_unitario - costo_unitario
@@ -462,7 +446,6 @@ const VisualizarInventariosPage: React.FC = () => {
               }
             } else {
               nuevosTotalesExistencias[inventario._id] = 0;
-              nuevosTotalesCosto[inventario._id] = 0;
               nuevosTotalesUtilidad[inventario._id] = 0;
               nuevosCostosPromedio[inventario._id] = 0;
             }
@@ -470,7 +453,6 @@ const VisualizarInventariosPage: React.FC = () => {
         } catch (err) {
           console.error(`Error al obtener items del inventario ${inventario._id}:`, err);
           nuevosTotalesExistencias[inventario._id] = 0;
-          nuevosTotalesCosto[inventario._id] = 0;
           nuevosTotalesUtilidad[inventario._id] = 0;
           nuevosCostosPromedio[inventario._id] = 0;
         }
@@ -481,7 +463,6 @@ const VisualizarInventariosPage: React.FC = () => {
       // Solo actualizar si el componente aún está montado
       if (!cancelado) {
         setTotalesExistencias(nuevosTotalesExistencias);
-        setTotalesCostoInventario(nuevosTotalesCosto);
         setTotalesUtilidadInventario(nuevosTotalesUtilidad);
         setCostosPromedioInventario(nuevosCostosPromedio);
       }
@@ -526,76 +507,6 @@ const VisualizarInventariosPage: React.FC = () => {
     setInventarioParaVer(null);
   };
 
-  const handleCambiarDescuento = async (inventarioId: string, porcentaje: number) => {
-    // Validar que el porcentaje esté entre 0 y 100
-    if (porcentaje < 0 || porcentaje > 100) {
-      setError("El porcentaje de descuento debe estar entre 0 y 100");
-      return;
-    }
-
-    // Actualizar el estado local inmediatamente
-    setDescuentosPorInventario(prev => ({
-      ...prev,
-      [inventarioId]: porcentaje
-    }));
-
-    // Marcar como guardando
-    setGuardandoDescuento(prev => ({
-      ...prev,
-      [inventarioId]: true
-    }));
-
-    try {
-      const token = localStorage.getItem("access_token");
-      if (!token) throw new Error("No se encontró el token de autenticación");
-
-      // Intentar actualizar el inventario en el backend
-      const res = await fetch(`${API_BASE_URL}/inventarios/${inventarioId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          porcentaje_descuento: porcentaje,
-        }),
-      });
-
-      if (!res.ok) {
-        // Si el endpoint no existe, solo guardar localmente
-        if (res.status === 404 || res.status === 405) {
-          console.warn("El endpoint PATCH /inventarios/{id} no está disponible. El descuento se guardará solo localmente.");
-        } else {
-          const errorData = await res.json().catch(() => null);
-          throw new Error(errorData?.detail || errorData?.message || "Error al guardar el descuento");
-        }
-      }
-
-      // Actualizar el inventario en el estado local
-      setInventarios(prev => prev.map(inv => 
-        inv._id === inventarioId 
-          ? { ...inv, porcentaje_descuento: porcentaje }
-          : inv
-      ));
-    } catch (err: any) {
-      console.error("Error al guardar descuento:", err);
-      // Revertir el cambio local si falla
-      setDescuentosPorInventario(prev => {
-        const inventario = inventarios.find(inv => inv._id === inventarioId);
-        return {
-          ...prev,
-          [inventarioId]: inventario?.porcentaje_descuento ?? 0
-        };
-      });
-      setError(err.message || "Error al guardar el descuento");
-    } finally {
-      setGuardandoDescuento(prev => ({
-        ...prev,
-        [inventarioId]: false
-      }));
-    }
-  };
-
   const handleCerrarModal = async () => {
     console.log('[handleCerrarModal] Iniciando actualización después de modificar item...');
     // NO cerrar el modal todavía, primero actualizar los datos
@@ -625,7 +536,6 @@ const VisualizarInventariosPage: React.FC = () => {
     if (!token) return;
 
     const nuevosTotalesExistencias: { [key: string]: number } = {};
-    const nuevosTotalesCosto: { [key: string]: number } = {};
     
     // Cargar totales en paralelo para todos los inventarios
     const promesas = inventariosACalcular.map(async (inventario) => {
@@ -660,43 +570,23 @@ const VisualizarInventariosPage: React.FC = () => {
             }, 0);
             nuevosTotalesExistencias[inventario._id] = totalExistencias;
             
-            // Calcular costo total del inventario: suma de (cantidad × costo_unitario) de todos los items
-            // El backend usa 'cantidad' para existencia y 'costo_unitario' para costo
-            const costoTotal = items.reduce((sum, item: any) => {
-              const cantidad = item.cantidad ?? item.existencia ?? 0;
-              const costo = item.costo_unitario ?? item.costo ?? 0;
-              const cantidadNum = cantidad !== null && cantidad !== undefined ? Number(cantidad) : 0;
-              const costoNum = costo !== null && costo !== undefined ? Number(costo) : 0;
-              if (isNaN(cantidadNum) || isNaN(costoNum)) {
-                console.warn(`[Recalcular Totales] Valores inválidos para item ${item.codigo}: cantidad=${cantidad}, costo=${costo}`);
-                return sum;
-              }
-              const subtotal = cantidadNum * costoNum;
-              return sum + subtotal;
-            }, 0);
-            nuevosTotalesCosto[inventario._id] = costoTotal;
-            
-            console.log(`[Recalcular Totales] Inventario ${inventario._id}: ${items.length} items, Total Existencias: ${totalExistencias}, Total Costo: ${costoTotal}`);
+            console.log(`[Recalcular Totales] Inventario ${inventario._id}: ${items.length} items, Total Existencias: ${totalExistencias}`);
           } else {
             nuevosTotalesExistencias[inventario._id] = 0;
-            nuevosTotalesCosto[inventario._id] = 0;
           }
         } else {
           console.error(`[Recalcular Totales] Error al obtener items del inventario ${inventario._id}: ${res.status} ${res.statusText}`);
           nuevosTotalesExistencias[inventario._id] = 0;
-          nuevosTotalesCosto[inventario._id] = 0;
         }
       } catch (err) {
         console.error(`[Recalcular Totales] Error al obtener items del inventario ${inventario._id}:`, err);
         nuevosTotalesExistencias[inventario._id] = 0;
-        nuevosTotalesCosto[inventario._id] = 0;
       }
     });
 
     await Promise.all(promesas);
-    console.log('[Recalcular Totales] Nuevos totales calculados:', { nuevosTotalesExistencias, nuevosTotalesCosto });
+    console.log('[Recalcular Totales] Nuevos totales calculados:', { nuevosTotalesExistencias });
     setTotalesExistencias(nuevosTotalesExistencias);
-    setTotalesCostoInventario(nuevosTotalesCosto);
   };
 
   const handleCancelarEliminar = () => {
