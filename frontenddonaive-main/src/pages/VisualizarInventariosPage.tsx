@@ -175,6 +175,15 @@ const VisualizarInventariosPage: React.FC = () => {
           }
         }
         console.log(`✅ [INVENTARIOS] Productos cargados desde inventarios: ${productosDesdeInventarios.length}`);
+        // ✅ DEBUG: Verificar si PPPP1 está en los productos cargados
+        const productoPPPP1 = productosDesdeInventarios.find((p: any) => 
+          (p.codigo || "").toUpperCase() === "PPPP1"
+        );
+        if (productoPPPP1) {
+          console.log(`✅ [INVENTARIOS] Producto PPPP1 encontrado en inventarios:`, productoPPPP1);
+        } else {
+          console.warn(`⚠️ [INVENTARIOS] Producto PPPP1 NO encontrado en inventarios cargados`);
+        }
       } catch (err) {
         console.warn("⚠️ [INVENTARIOS] Error al cargar productos desde inventarios:", err);
       }
