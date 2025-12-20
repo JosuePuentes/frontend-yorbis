@@ -23,9 +23,11 @@ interface ItemVenta {
 interface Venta {
   _id: string;
   numero_factura?: string;
+  numeroFactura?: string; // ✅ Compatibilidad con backend que puede usar camelCase
   fecha: string;
   fechaCreacion?: string; // Formato: "2025-01-15 10:30:00"
-  items: ItemVenta[];
+  items?: ItemVenta[]; // ✅ Opcional para compatibilidad
+  productos?: ItemVenta[]; // ✅ El backend puede usar "productos" en lugar de "items"
   cliente?: {
     _id?: string;
     nombre?: string;
