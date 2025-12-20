@@ -331,7 +331,7 @@ const VisualizarInventariosPage: React.FC = () => {
       productosInventarioMap.forEach((producto: any, codigoKey: string) => {
         // Solo agregar si NO fue agregado desde compras
         if (!productosAgregadosDesdeCompras.has(codigoKey)) {
-          todosLosProductos.push(producto);
+        todosLosProductos.push(producto);
         }
       });
       
@@ -741,6 +741,24 @@ const VisualizarInventariosPage: React.FC = () => {
     });
   }, [itemsInventarios, busquedaItemInventario]);
 
+  // ✅ CRÍTICO: Filtrar items de inventarios por búsqueda (código, descripción, marca)
+  const itemsInventariosFiltrados = useMemo(() => {
+    if (!busquedaItemInventario.trim()) {
+      return itemsInventarios;
+    }
+
+    const busquedaLower = busquedaItemInventario.toLowerCase().trim();
+    return itemsInventarios.filter((item: any) => {
+      const codigo = (item.codigo || "").toLowerCase();
+      const descripcion = (item.descripcion || item.nombre || "").toLowerCase();
+      const marca = (item.marca || item.marca_producto || "").toLowerCase();
+      
+      return codigo.includes(busquedaLower) ||
+             descripcion.includes(busquedaLower) ||
+             marca.includes(busquedaLower);
+    });
+  }, [itemsInventarios, busquedaItemInventario]);
+
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -827,7 +845,7 @@ const VisualizarInventariosPage: React.FC = () => {
             </div>
           </div>
         )}
-
+        
         {/* Componente para subir inventario desde Excel - Solo mostrar si no está en vista tabla */}
         {!vistaTabla && (
         <UploadInventarioExcel
@@ -991,15 +1009,15 @@ const VisualizarInventariosPage: React.FC = () => {
                           </td>
                           <td className="px-4 py-3 text-sm text-right">
                             <span className={`text-base font-bold ${
-                              Math.abs(porcentajeGanancia - 40.0) < 0.01 
+                                Math.abs(porcentajeGanancia - 40.0) < 0.01 
                                 ? 'text-green-700 bg-green-100 px-3 py-1 rounded' 
-                                : porcentajeGanancia > 40.0 
-                                  ? 'text-blue-600' 
-                                  : 'text-orange-600'
-                            }`}>
-                              {porcentajeGanancia.toFixed(2)}%
-                              {Math.abs(porcentajeGanancia - 40.0) < 0.01 && ' ✓'}
-                            </span>
+                                  : porcentajeGanancia > 40.0 
+                                    ? 'text-blue-600' 
+                                    : 'text-orange-600'
+                              }`}>
+                                {porcentajeGanancia.toFixed(2)}%
+                                {Math.abs(porcentajeGanancia - 40.0) < 0.01 && ' ✓'}
+                              </span>
                           </td>
                           <td className="px-4 py-3 text-sm text-right font-semibold text-slate-900">
                             ${precio.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1373,16 +1391,16 @@ const VisualizarInventariosPage: React.FC = () => {
                         
                         // Intentar endpoint con ID
                         try {
-                          const res = await fetch(
+                        const res = await fetch(
                             `${API_BASE_URL}/inventarios/${inventarioId}/items/${itemId}`,
-                            {
-                              method: "DELETE",
-                              headers: {
-                                "Authorization": `Bearer ${token}`,
+                          {
+                            method: "DELETE",
+                            headers: {
+                              "Authorization": `Bearer ${token}`,
                                 "Content-Type": "application/json",
-                              },
-                            }
-                          );
+                            },
+                          }
+                        );
 
                           if (res.ok) {
                             eliminado = true;
@@ -1412,7 +1430,7 @@ const VisualizarInventariosPage: React.FC = () => {
                               }
                             }
                           } else {
-                            const errorData = await res.json().catch(() => null);
+                          const errorData = await res.json().catch(() => null);
                             throw new Error(errorData?.detail || errorData?.message || `Error al eliminar producto: ${res.status}`);
                           }
                         } catch (fetchError: any) {
