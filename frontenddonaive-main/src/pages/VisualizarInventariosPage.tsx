@@ -38,10 +38,9 @@ const VisualizarInventariosPage: React.FC = () => {
   const [showVerItemsModal, setShowVerItemsModal] = useState(false);
   const [inventarioParaVer, setInventarioParaVer] = useState<Inventario | null>(null);
   const [refreshItemsTrigger, setRefreshItemsTrigger] = useState(0);
-  const [totalesExistencias, setTotalesExistencias] = useState<{ [key: string]: number }>({});
-  const [totalesUtilidadInventario, setTotalesUtilidadInventario] = useState<{ [key: string]: number }>({});
-  const [costosPromedioInventario, setCostosPromedioInventario] = useState<{ [key: string]: number }>({});
   const [descuentosPorInventario, setDescuentosPorInventario] = useState<{ [key: string]: number }>({});
+  const [itemsInventarios, setItemsInventarios] = useState<any[]>([]); // Items individuales de todos los inventarios
+  const [itemAModificar, setItemAModificar] = useState<any | null>(null); // Item específico a modificar
   
   // Estados para la vista de productos
   const [todosLosProductos, setTodosLosProductos] = useState<any[]>([]);
@@ -475,6 +474,68 @@ const VisualizarInventariosPage: React.FC = () => {
       cancelado = true;
     };
   }, [inventarios]);
+
+  // Cargar todos los items de todos los inventarios para mostrar en la tabla
+  useEffect(() => {
+    let cancelado = false;
+    
+    const cargarItemsInventarios = async () => {
+      if (inventarios.length === 0) {
+        if (!cancelado) {
+          setItemsInventarios([]);
+        }
+        return;
+      }
+      
+      const token = localStorage.getItem("access_token");
+      if (!token) return;
+
+      const todosLosItems: any[] = [];
+      
+      // Cargar items en paralelo para todos los inventarios
+      const promesas = inventarios.map(async (inventario) => {
+        try {
+          const res = await fetch(`${API_BASE_URL}/inventarios/${inventario._id}/items`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (res.ok) {
+            const items = await res.json();
+            if (Array.isArray(items)) {
+              const farmaciaNombre = farmacias.find(f => f.id === inventario.farmacia || f.nombre === inventario.farmacia)?.nombre || inventario.farmacia;
+              const fechaCarga = inventario.fecha ? new Date(inventario.fecha).toLocaleDateString('es-VE') : 'N/A';
+              
+              items.forEach((item: any) => {
+                todosLosItems.push({
+                  ...item,
+                  inventario_id: inventario._id,
+                  sucursal_nombre: farmaciaNombre,
+                  sucursal_id: inventario.farmacia,
+                  fecha_carga: fechaCarga,
+                });
+              });
+            }
+          }
+        } catch (err) {
+          console.error(`Error al obtener items del inventario ${inventario._id}:`, err);
+        }
+      });
+
+      await Promise.all(promesas);
+      
+      if (!cancelado) {
+        setItemsInventarios(todosLosItems);
+      }
+    };
+
+    cargarItemsInventarios();
+    
+    return () => {
+      cancelado = true;
+    };
+  }, [inventarios, farmacias]);
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/farmacias`)
@@ -1001,11 +1062,20 @@ const VisualizarInventariosPage: React.FC = () => {
                     <th scope="col" className="px-5 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">
                       Fecha de Carga
                     </th>
+                    <th scope="col" className="px-5 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">
+                      Código
+                    </th>
+                    <th scope="col" className="px-5 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">
+                      Descripción
+                    </th>
+                    <th scope="col" className="px-5 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">
+                      Marca
+                    </th>
                     <th scope="col" className="px-5 py-3.5 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">
                       Costo del Producto
                     </th>
                     <th scope="col" className="px-5 py-3.5 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">
-                      Utilidad
+                      Utilidad (%)
                     </th>
                     <th scope="col" className="px-5 py-3.5 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">
                       Existencia
@@ -1016,59 +1086,79 @@ const VisualizarInventariosPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-slate-200">
-                  {inventariosFiltrados.map(i => {
-                    // Obtener el nombre de la farmacia desde el ID
-                    const farmaciaNombre = farmacias.find(f => f.id === i.farmacia || f.nombre === i.farmacia)?.nombre || i.farmacia;
-                    const fechaCarga = i.fecha ? new Date(i.fecha).toLocaleDateString('es-VE') : 'N/A';
-                    const costoPromedio = costosPromedioInventario[i._id] ?? 0;
-                    const utilidadTotal = totalesUtilidadInventario[i._id] ?? 0;
-                    const totalExist = totalesExistencias[i._id] ?? 0;
+                  {itemsInventarios.map((item: any, index: number) => {
+                    const costo = Number(item.costo_unitario || item.costo || 0);
+                    const precio = Number(item.precio_unitario || item.precio || 0);
+                    const utilidad = Number(item.utilidad || (precio - costo));
+                    const utilidadPorcentaje = Number(item.utilidad_porcentaje || item.porcentaje_ganancia || 0);
+                    const cantidad = Number(item.cantidad || item.existencia || 0);
+                    
+                    // Calcular porcentaje de ganancia si no viene
+                    let porcentajeGanancia = utilidadPorcentaje;
+                    if (porcentajeGanancia === 0 && utilidad > 0 && costo > 0) {
+                      porcentajeGanancia = (utilidad / costo) * 100;
+                    } else if (porcentajeGanancia === 0 && precio > costo && costo > 0) {
+                      porcentajeGanancia = ((precio - costo) / costo) * 100;
+                    } else if (porcentajeGanancia === 0 && costo > 0) {
+                      porcentajeGanancia = 40.0; // Default 40%
+                    }
                     
                     return (
-                      <tr key={i._id} className="hover:bg-slate-50 transition-colors duration-150 ease-in-out">
+                      <tr key={item._id || item.id || index} className="hover:bg-slate-50 transition-colors duration-150 ease-in-out">
                         <td className="px-5 py-4 whitespace-nowrap text-sm font-medium text-slate-700">
-                          {farmaciaNombre}
+                          {item.sucursal_nombre || item.sucursal_id || "-"}
                         </td>
                         <td className="px-5 py-4 whitespace-nowrap text-sm text-slate-700">
-                          {fechaCarga}
+                          {item.fecha_carga || "-"}
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
+                          {item.codigo || "-"}
+                        </td>
+                        <td className="px-5 py-4 text-sm text-slate-700">
+                          {item.descripcion || item.nombre || "-"}
+                        </td>
+                        <td className="px-5 py-4 text-sm text-slate-600">
+                          {item.marca || item.marca_producto || (
+                            <span className="text-slate-400 italic">Sin marca</span>
+                          )}
                         </td>
                         <td className="px-5 py-4 whitespace-nowrap text-sm text-slate-700 text-right font-semibold">
-                          ${costoPromedio.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ${costo.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td className="px-5 py-4 whitespace-nowrap text-sm text-green-600 text-right font-semibold">
-                          ${utilidadTotal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <td className="px-5 py-4 whitespace-nowrap text-sm text-right">
+                          <div className="flex flex-col items-end">
+                            <span className="text-green-600 font-semibold">
+                              ${utilidad.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            <span className={`text-xs font-bold ${
+                              Math.abs(porcentajeGanancia - 40.0) < 0.01 
+                                ? 'text-green-700 bg-green-100 px-2 py-0.5 rounded' 
+                                : porcentajeGanancia > 40.0 
+                                  ? 'text-blue-600' 
+                                  : 'text-orange-600'
+                            }`}>
+                              {porcentajeGanancia.toFixed(2)}%
+                              {Math.abs(porcentajeGanancia - 40.0) < 0.01 && ' ✓'}
+                            </span>
+                          </div>
                         </td>
                         <td className="px-5 py-4 whitespace-nowrap text-sm text-slate-700 text-right font-semibold">
-                          {totalExist.toLocaleString('es-VE')}
+                          {cantidad.toLocaleString('es-VE')}
                         </td>
                         <td className="px-5 py-4 whitespace-nowrap text-sm text-center">
                           <div className="flex items-center justify-center gap-2">
                             <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleVerItems(i)}
-                              className="flex items-center gap-1"
-                            >
-                              <Eye className="w-4 h-4" />
-                              Ver Items
-                            </Button>
-                            <Button
                               variant="default"
                               size="sm"
-                              onClick={() => handleModificarItems(i)}
+                              onClick={() => {
+                                setItemAModificar(item);
+                                setInventarioSeleccionado(inventarios.find(inv => inv._id === item.inventario_id) || null);
+                                setShowModificarModal(true);
+                              }}
                               className="flex items-center gap-1"
                             >
                               <Edit className="w-4 h-4" />
-                              Modificar Items
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleEliminarClick(i)}
-                              className="flex items-center gap-1"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              Eliminar
+                              Modificar Item
                             </Button>
                           </div>
                         </td>
@@ -1097,10 +1187,51 @@ const VisualizarInventariosPage: React.FC = () => {
         {showModificarModal && inventarioSeleccionado && (
           <ModificarItemInventarioModal
             open={showModificarModal}
-            onClose={handleCerrarModal}
+            onClose={() => {
+              handleCerrarModal();
+              setItemAModificar(null);
+            }}
             inventarioId={inventarioSeleccionado._id}
             sucursalId={farmacias.find(f => f.id === inventarioSeleccionado.farmacia || f.nombre === inventarioSeleccionado.farmacia)?.id || inventarioSeleccionado.farmacia}
-            onSuccess={handleCerrarModal}
+            onSuccess={() => {
+              handleCerrarModal();
+              setItemAModificar(null);
+              // Recargar items después de modificar
+              const cargarItems = async () => {
+                const token = localStorage.getItem("access_token");
+                if (!token) return;
+                const todosLosItems: any[] = [];
+                const promesas = inventarios.map(async (inventario) => {
+                  try {
+                    const res = await fetch(`${API_BASE_URL}/inventarios/${inventario._id}/items`, {
+                      headers: { Authorization: `Bearer ${token}` },
+                    });
+                    if (res.ok) {
+                      const items = await res.json();
+                      if (Array.isArray(items)) {
+                        const farmaciaNombre = farmacias.find(f => f.id === inventario.farmacia || f.nombre === inventario.farmacia)?.nombre || inventario.farmacia;
+                        const fechaCarga = inventario.fecha ? new Date(inventario.fecha).toLocaleDateString('es-VE') : 'N/A';
+                        items.forEach((item: any) => {
+                          todosLosItems.push({
+                            ...item,
+                            inventario_id: inventario._id,
+                            sucursal_nombre: farmaciaNombre,
+                            sucursal_id: inventario.farmacia,
+                            fecha_carga: fechaCarga,
+                          });
+                        });
+                      }
+                    }
+                  } catch (err) {
+                    console.error(`Error al obtener items del inventario ${inventario._id}:`, err);
+                  }
+                });
+                await Promise.all(promesas);
+                setItemsInventarios(todosLosItems);
+              };
+              cargarItems();
+            }}
+            itemId={itemAModificar?.codigo || itemAModificar?._id || undefined}
           />
         )}
 

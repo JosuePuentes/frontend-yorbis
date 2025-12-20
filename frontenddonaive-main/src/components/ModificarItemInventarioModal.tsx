@@ -35,6 +35,7 @@ interface ModificarItemInventarioModalProps {
   inventarioId: string;
   sucursalId: string;
   onSuccess?: () => void;
+  itemId?: string; // ID o código del item específico a modificar
 }
 
 const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> = ({
@@ -43,6 +44,7 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
   inventarioId,
   sucursalId,
   onSuccess,
+  itemId,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -75,6 +77,33 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
       setProductoSeleccionado(null);
     }
   }, [open, sucursalId]);
+
+  // Seleccionar automáticamente el item si se pasa itemId
+  useEffect(() => {
+    if (open && itemId && productosTodos.length > 0) {
+      const itemEncontrado = productosTodos.find(
+        (p) => p.codigo === itemId || p.id === itemId || p._id === itemId
+      );
+      if (itemEncontrado) {
+        setProductoSeleccionado(itemEncontrado);
+        // Llenar los campos automáticamente
+        setCodigo(itemEncontrado.codigo || "");
+        setDescripcion(itemEncontrado.descripcion || itemEncontrado.nombre || "");
+        setMarca(itemEncontrado.marca || itemEncontrado.marca_producto || "");
+        setCosto(itemEncontrado.costo_unitario || itemEncontrado.costo || 0);
+        setExistencia(itemEncontrado.cantidad || itemEncontrado.existencia || 0);
+        setPrecio(itemEncontrado.precio_unitario || itemEncontrado.precio || 0);
+        // Calcular porcentaje de ganancia
+        const costoItem = itemEncontrado.costo_unitario || itemEncontrado.costo || 0;
+        const precioItem = itemEncontrado.precio_unitario || itemEncontrado.precio || 0;
+        if (costoItem > 0 && precioItem > costoItem) {
+          const porcentaje = ((precioItem - costoItem) / costoItem) * 100;
+          setPorcentajeGanancia(porcentaje);
+        }
+        setLotes(itemEncontrado.lotes || []);
+      }
+    }
+  }, [open, itemId, productosTodos]);
 
   // Filtrar productos localmente cuando cambia el término de búsqueda
   useEffect(() => {
