@@ -784,6 +784,9 @@ const VisualizarInventariosPage: React.FC = () => {
                         precio = costo * (1 + porcentajeGanancia / 100);
                       }
                       
+                      // Calcular utilidad en monto (precio - costo)
+                      const utilidad = precio - costo;
+                      
                       const total = costo * cantidad; // Total = Costo × Cantidad
                       
                       return (
