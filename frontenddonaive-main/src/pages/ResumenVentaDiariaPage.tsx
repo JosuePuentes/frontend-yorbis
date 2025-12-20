@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Search, Calendar, Download, Filter } from "lucide-react";
+import { Search, Calendar, Download } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
