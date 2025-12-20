@@ -403,13 +403,33 @@ const PuntoVentaPage: React.FC = () => {
               console.log(`📦 [PUNTO_VENTA] Primer producto:`, productosArray[0]);
               console.log(`📦 [PUNTO_VENTA] Campos del primer producto:`, Object.keys(productosArray[0]));
               console.log(`💰 [PUNTO_VENTA] Precio del primer producto:`, productosArray[0].precio || productosArray[0].precio_usd || productosArray[0].precio_unitario);
+              // ✅ CRÍTICO: Verificar existencia del primer producto
+              const primerProducto = productosArray[0];
+              console.log(`📊 [PUNTO_VENTA] Existencia del primer producto:`, {
+                existencia: primerProducto.existencia,
+                cantidad: primerProducto.cantidad,
+                stock: primerProducto.stock
+              });
             } else {
               console.warn(`⚠️ [PUNTO_VENTA] No se encontraron productos para la búsqueda: "${busqueda}"`);
             }
             
+            // ✅ CRÍTICO: Normalizar existencia en todos los productos para asegurar consistencia
+            const productosNormalizados = productosArray.map((producto: any) => {
+              // Prioridad: existencia > cantidad > stock (según instrucciones del backend)
+              const existencia = producto.existencia ?? producto.cantidad ?? producto.stock ?? 0;
+              
+              return {
+                ...producto,
+                existencia: existencia,  // Campo principal
+                cantidad: existencia,   // Sincronizar
+                stock: existencia       // Sincronizar
+              };
+            });
+            
             // Guardar en caché
             cacheBusquedas.current.set(cacheKey, {
-              productos: productosArray,
+              productos: productosNormalizados,
               timestamp: Date.now()
             });
             
@@ -421,7 +441,7 @@ const PuntoVentaPage: React.FC = () => {
               }
             }
             
-            setProductosEncontrados(productosArray);
+            setProductosEncontrados(productosNormalizados);
           } else if (res.status === 404 && !abortController.signal.aborted) {
             // Si el endpoint no existe, intentar cargar desde inventarios
             console.warn(`⚠️ [PUNTO_VENTA] Endpoint de búsqueda no encontrado, intentando cargar desde inventarios...`);
