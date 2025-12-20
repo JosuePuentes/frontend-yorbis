@@ -956,16 +956,13 @@ const VisualizarInventariosPage: React.FC = () => {
                       porcentajeGanancia = 40.0;
                     }
                     
-                    // ✅ Calcular precio de venta: costo + (costo * 40%)
-                    // Si no hay precio_unitario, calcularlo desde costo + utilidad 40%
+                    // ✅ Calcular precio de venta: costo + (costo * porcentajeGanancia / 100)
+                    // Si no hay precio_unitario, calcularlo desde costo + utilidad
                     let precio = Number(item.precio_unitario || item.precio || 0);
                     if (precio === 0 && costo > 0) {
-                      // Calcular precio desde costo + 40% de utilidad
+                      // Calcular precio desde costo + porcentaje de utilidad
                       precio = costo * (1 + porcentajeGanancia / 100);
                     }
-                    
-                    // Calcular utilidad en monto
-                    const utilidad = precio - costo;
                     
                     return (
                       <tr key={item._id || item.id || index} className="hover:bg-slate-50 transition-colors duration-150 ease-in-out">
