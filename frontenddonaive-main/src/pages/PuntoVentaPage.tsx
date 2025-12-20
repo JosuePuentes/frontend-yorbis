@@ -2069,15 +2069,23 @@ const PuntoVentaPage: React.FC = () => {
       setMetodosPago([]);
       setShowPagoModal(false);
       
-      // ✅ CRÍTICO: Refrescar productos para actualizar stock después de la venta
-      console.log("🔄 [PUNTO_VENTA] Refrescando productos para actualizar stock...");
+      // ✅ CRÍTICO: Refrescar productos para actualizar existencia después de la venta
+      console.log("🔄 [PUNTO_VENTA] Refrescando productos para actualizar existencia después de la venta...");
+      console.log("   - La existencia debe actualizarse automáticamente cuando el backend descuente del inventario");
+      
+      // Limpiar caché de búsquedas para forzar recarga
+      cacheBusquedas.current.clear();
+      
       if (busquedaItem.trim().length > 0) {
         // Si hay una búsqueda activa, refrescar los productos encontrados
         const busquedaActual = busquedaItem;
         setBusquedaItem(""); // Limpiar temporalmente
         setTimeout(() => {
-          setBusquedaItem(busquedaActual); // Restaurar búsqueda para refrescar
-        }, 100);
+          setBusquedaItem(busquedaActual); // Restaurar búsqueda para refrescar con existencia actualizada
+        }, 500); // Aumentar delay para dar tiempo al backend de actualizar
+      } else {
+        // Si no hay búsqueda, limpiar productos encontrados
+        setProductosEncontrados([]);
       }
       
       // ✅ NUEVO: Actualizar facturas procesadas automáticamente
