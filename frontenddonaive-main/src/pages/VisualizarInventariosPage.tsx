@@ -1258,35 +1258,136 @@ const VisualizarInventariosPage: React.FC = () => {
                   onClick={async () => {
                     if (!productoAEliminar) return;
                     setEliminandoProducto(true);
+                    setError(null);
+                    
                     try {
                       const token = localStorage.getItem("access_token");
-                      if (!token) throw new Error("No se encontró el token de autenticación");
+                      if (!token) {
+                        throw new Error("No se encontró el token de autenticación");
+                      }
 
-                      // Intentar eliminar desde el inventario
+                      console.log("🗑️ [ELIMINAR] Intentando eliminar producto:", {
+                        producto_id: productoAEliminar._id,
+                        codigo: productoAEliminar.codigo,
+                        inventario_id: productoAEliminar.inventario_id
+                      });
+
+                      // ✅ CRÍTICO: Intentar eliminar desde el inventario
+                      let eliminado = false;
+                      
                       if (productoAEliminar.inventario_id) {
-                        const res = await fetch(
-                          `${API_BASE_URL}/inventarios/${productoAEliminar.inventario_id}/items/${productoAEliminar._id}`,
-                          {
-                            method: "DELETE",
-                            headers: {
-                              "Authorization": `Bearer ${token}`,
-                            },
-                          }
-                        );
+                        // Intentar eliminar por ID del item
+                        const itemId = productoAEliminar._id || productoAEliminar.id;
+                        const inventarioId = productoAEliminar.inventario_id;
+                        
+                        console.log(`🗑️ [ELIMINAR] Eliminando item ${itemId} del inventario ${inventarioId}`);
+                        
+                        // Intentar endpoint con ID
+                        try {
+                          const res = await fetch(
+                            `${API_BASE_URL}/inventarios/${inventarioId}/items/${itemId}`,
+                            {
+                              method: "DELETE",
+                              headers: {
+                                "Authorization": `Bearer ${token}`,
+                                "Content-Type": "application/json",
+                              },
+                            }
+                          );
 
-                        if (!res.ok && res.status !== 404) {
-                          const errorData = await res.json().catch(() => null);
-                          throw new Error(errorData?.detail || errorData?.message || "Error al eliminar producto");
+                          if (res.ok) {
+                            eliminado = true;
+                            console.log("✅ [ELIMINAR] Producto eliminado correctamente del inventario");
+                          } else if (res.status === 404) {
+                            // Si no se encuentra por ID, intentar por código
+                            console.log("⚠️ [ELIMINAR] No se encontró por ID, intentando por código...");
+                            
+                            if (productoAEliminar.codigo) {
+                              const resCodigo = await fetch(
+                                `${API_BASE_URL}/inventarios/${inventarioId}/items/codigo/${encodeURIComponent(productoAEliminar.codigo)}`,
+                                {
+                                  method: "DELETE",
+                                  headers: {
+                                    "Authorization": `Bearer ${token}`,
+                                    "Content-Type": "application/json",
+                                  },
+                                }
+                              );
+                              
+                              if (resCodigo.ok) {
+                                eliminado = true;
+                                console.log("✅ [ELIMINAR] Producto eliminado por código");
+                              } else {
+                                const errorData = await resCodigo.json().catch(() => null);
+                                throw new Error(errorData?.detail || errorData?.message || `Error al eliminar producto: ${resCodigo.status}`);
+                              }
+                            }
+                          } else {
+                            const errorData = await res.json().catch(() => null);
+                            throw new Error(errorData?.detail || errorData?.message || `Error al eliminar producto: ${res.status}`);
+                          }
+                        } catch (fetchError: any) {
+                          console.error("❌ [ELIMINAR] Error en la petición:", fetchError);
+                          throw fetchError;
+                        }
+                      } else {
+                        // Si no tiene inventario_id, intentar buscar el inventario activo de la sucursal
+                        console.log("⚠️ [ELIMINAR] Producto no tiene inventario_id, buscando inventario activo...");
+                        
+                        if (productoAEliminar.sucursal_id) {
+                          // Buscar inventario activo de la sucursal
+                          const inventarioActivo = inventarios.find((inv: any) => 
+                            (inv.farmacia === productoAEliminar.sucursal_id || inv.sucursal_id === productoAEliminar.sucursal_id) &&
+                            inv.estado === "activo"
+                          );
+                          
+                          if (inventarioActivo && productoAEliminar.codigo) {
+                            const resCodigo = await fetch(
+                              `${API_BASE_URL}/inventarios/${inventarioActivo._id}/items/codigo/${encodeURIComponent(productoAEliminar.codigo)}`,
+                              {
+                                method: "DELETE",
+                                headers: {
+                                  "Authorization": `Bearer ${token}`,
+                                  "Content-Type": "application/json",
+                                },
+                              }
+                            );
+                            
+                            if (resCodigo.ok) {
+                              eliminado = true;
+                              console.log("✅ [ELIMINAR] Producto eliminado del inventario activo");
+                            } else {
+                              const errorData = await resCodigo.json().catch(() => null);
+                              throw new Error(errorData?.detail || errorData?.message || "Error al eliminar producto del inventario activo");
+                            }
+                          } else {
+                            throw new Error("No se encontró inventario activo para eliminar el producto");
+                          }
+                        } else {
+                          throw new Error("No se puede eliminar: el producto no tiene inventario_id ni sucursal_id");
                         }
                       }
 
-                      // Recargar productos
+                      if (!eliminado) {
+                        throw new Error("No se pudo eliminar el producto. Verifique que existe en el inventario.");
+                      }
+
+                      // ✅ Recargar productos después de eliminar
+                      console.log("🔄 [ELIMINAR] Recargando productos...");
                       await cargarTodosLosProductos();
+                      
+                      // Cerrar modal y limpiar estado
                       setShowEliminarProductoModal(false);
                       setProductoAEliminar(null);
+                      
+                      // Mostrar mensaje de éxito
+                      alert("✅ Producto eliminado correctamente de la base de datos");
+                      
                     } catch (err: any) {
-                      setError(err.message || "Error al eliminar el producto");
-                      console.error("Error al eliminar producto:", err);
+                      const mensajeError = err.message || "Error al eliminar el producto";
+                      setError(mensajeError);
+                      console.error("❌ [ELIMINAR] Error al eliminar producto:", err);
+                      alert(`❌ Error: ${mensajeError}`);
                     } finally {
                       setEliminandoProducto(false);
                     }
