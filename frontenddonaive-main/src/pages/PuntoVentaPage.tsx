@@ -1999,7 +1999,15 @@ const PuntoVentaPage: React.FC = () => {
       const data = await res.json();
       console.log("✅ [VENTA] Venta registrada exitosamente. Respuesta del backend:", data);
       console.log("📋 [VENTA] Número de factura:", data.numero_factura || data._id);
-      console.log("⚠️ [VENTA] IMPORTANTE: Verificar en el backend que las cantidades se descontaron del inventario");
+      
+      // ✅ CRÍTICO: Verificar si el backend descontó la existencia
+      if (data.existencia_descontada === false || data.message?.includes("no se descontó")) {
+        console.error("❌ [VENTA] ERROR: El backend NO descontó la existencia del inventario");
+        alert("⚠️ ADVERTENCIA: La venta se registró pero la existencia NO se descontó del inventario. Contacte al administrador.");
+      } else {
+        console.log("✅ [VENTA] El backend debería haber descontado la existencia");
+      }
+      
       alert(`Venta registrada exitosamente. Número de factura: ${data.numero_factura || data._id}`);
       
       // Calcular vuelto si existe
@@ -2076,9 +2084,9 @@ const PuntoVentaPage: React.FC = () => {
       
       // ✅ CRÍTICO: Refrescar productos para actualizar existencia después de la venta
       console.log("🔄 [PUNTO_VENTA] Refrescando productos para actualizar existencia después de la venta...");
-      console.log("   - La existencia debe actualizarse automáticamente cuando el backend descuente del inventario");
+      console.log("   - IMPORTANTE: Si la existencia no se actualiza, el backend NO está descontando del inventario");
       
-      // Limpiar caché de búsquedas para forzar recarga
+      // Limpiar caché de búsquedas para forzar recarga completa
       cacheBusquedas.current.clear();
       
       if (busquedaItem.trim().length > 0) {
@@ -2087,12 +2095,20 @@ const PuntoVentaPage: React.FC = () => {
         setBusquedaItem(""); // Limpiar temporalmente
         setProductosEncontrados([]); // Limpiar productos encontrados
         
-        // ✅ CRÍTICO: Esperar más tiempo para que el backend actualice el inventario
-        // El backend debe descontar la cantidad del inventario antes de que refresquemos
+        // ✅ CRÍTICO: Esperar tiempo suficiente para que el backend actualice el inventario
+        // El backend debe descontar la cantidad del inventario ANTES de que refresquemos
+        // Si después de refrescar la existencia sigue igual, el backend NO está descontando
         setTimeout(() => {
-          console.log("🔄 [PUNTO_VENTA] Refrescando búsqueda después de venta...");
+          console.log("🔄 [PUNTO_VENTA] Refrescando búsqueda después de venta (esperando actualización del backend)...");
           setBusquedaItem(busquedaActual); // Restaurar búsqueda para refrescar con existencia actualizada
-        }, 1500); // Aumentar delay a 1.5 segundos para dar tiempo al backend
+          
+          // Verificar después de otro delay si la existencia se actualizó
+          setTimeout(() => {
+            console.log("🔍 [PUNTO_VENTA] Verificando si la existencia se actualizó correctamente...");
+            console.log("   - Si la existencia sigue igual, el backend NO está descontando del inventario");
+            console.log("   - Revisar logs del backend para confirmar que está descontando");
+          }, 2000);
+        }, 2000); // Aumentar delay a 2 segundos para dar más tiempo al backend
       } else {
         // Si no hay búsqueda, limpiar productos encontrados
         setProductosEncontrados([]);
