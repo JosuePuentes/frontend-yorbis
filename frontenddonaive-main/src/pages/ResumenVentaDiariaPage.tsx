@@ -108,7 +108,13 @@ const ResumenVentaDiariaPage: React.FC = () => {
       const ventasArray = Array.isArray(data) ? data : (data.facturas || data.ventas || data.data || []);
       
       console.log(`✅ [RESUMEN_VENTA] Ventas cargadas: ${ventasArray.length}`);
-      setVentas(ventasArray);
+      console.log(`📊 [RESUMEN_VENTA] Ejemplo de venta:`, ventasArray[0]);
+      
+      // Validar que las ventas tengan items
+      const ventasConItems = ventasArray.filter((v: any) => v.items && Array.isArray(v.items) && v.items.length > 0);
+      console.log(`✅ [RESUMEN_VENTA] Ventas con items: ${ventasConItems.length}`);
+      
+      setVentas(ventasConItems);
     } catch (err: any) {
       console.error("❌ [RESUMEN_VENTA] Error al cargar ventas:", err);
       setError(err.message || "Error al cargar ventas");
@@ -128,10 +134,23 @@ const ResumenVentaDiariaPage: React.FC = () => {
   const productosVendidos = useMemo(() => {
     const productos: ProductoVendido[] = [];
     
-    ventas.forEach((venta) => {
+      ventas.forEach((venta) => {
       if (!venta.items || !Array.isArray(venta.items)) return;
       
-      const fechaVenta = venta.fecha ? new Date(venta.fecha).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+      // Manejar diferentes formatos de fecha del backend
+      let fechaVenta: string;
+      if (venta.fechaCreacion) {
+        // Formato: "2025-01-15 10:30:00"
+        fechaVenta = venta.fechaCreacion.split(' ')[0];
+      } else if (venta.fecha) {
+        // Formato: "2025-01-15" o ISO string
+        fechaVenta = venta.fecha.includes('T') 
+          ? new Date(venta.fecha).toISOString().split('T')[0]
+          : venta.fecha.split(' ')[0]; // Por si acaso tiene hora
+      } else {
+        fechaVenta = new Date().toISOString().split('T')[0];
+      }
+      
       const clienteNombre = venta.cliente?.nombre || "Sin cliente";
       
       venta.items.forEach((item) => {
