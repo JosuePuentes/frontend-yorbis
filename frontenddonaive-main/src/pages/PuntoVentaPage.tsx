@@ -1773,19 +1773,42 @@ const PuntoVentaPage: React.FC = () => {
       const totalBs = calcularTotalBs();
 
       // Formatear items según el backend
-      const items = carrito.map((item) => ({
-        producto_id: item.producto.id,
-        nombre: item.producto.nombre,
-        codigo: item.producto.codigo || "",
-        cantidad: item.cantidad,
-        precio_unitario: item.precio_unitario,
-        precio_unitario_usd: item.precio_unitario_usd,
-        precio_unitario_original: item.precio_unitario_original || item.precio_unitario,
-        precio_unitario_original_usd: item.precio_unitario_original_usd || item.precio_unitario_usd,
-        subtotal: item.subtotal,
-        subtotal_usd: item.subtotal_usd,
-        descuento_aplicado: item.descuento_aplicado || 0,
-      }));
+      const items = carrito.map((item) => {
+        // Validar que el producto tenga ID
+        if (!item.producto.id) {
+          throw new Error(`El producto "${item.producto.nombre}" no tiene ID válido. No se puede procesar la venta.`);
+        }
+        
+        // Validar que la cantidad sea mayor a 0
+        if (!item.cantidad || item.cantidad <= 0) {
+          throw new Error(`La cantidad del producto "${item.producto.nombre}" debe ser mayor a 0.`);
+        }
+        
+        const itemFormateado = {
+          producto_id: item.producto.id,
+          nombre: item.producto.nombre,
+          codigo: item.producto.codigo || "",
+          cantidad: item.cantidad,
+          precio_unitario: item.precio_unitario,
+          precio_unitario_usd: item.precio_unitario_usd,
+          precio_unitario_original: item.precio_unitario_original || item.precio_unitario,
+          precio_unitario_original_usd: item.precio_unitario_original_usd || item.precio_unitario_usd,
+          subtotal: item.subtotal,
+          subtotal_usd: item.subtotal_usd,
+          descuento_aplicado: item.descuento_aplicado || 0,
+        };
+        
+        // Log detallado para depuración
+        console.log(`📦 [VENTA] Item formateado:`, {
+          producto_id: itemFormateado.producto_id,
+          codigo: itemFormateado.codigo,
+          nombre: itemFormateado.nombre,
+          cantidad: itemFormateado.cantidad,
+          sucursal: sucursalSeleccionada.id
+        });
+        
+        return itemFormateado;
+      });
 
       // Validar que cada método tenga divisa antes de formatear
       for (const metodo of metodosPago) {
@@ -1864,6 +1887,21 @@ const PuntoVentaPage: React.FC = () => {
         ventaData.vuelto = vueltoFormateado;
       }
 
+      // ⚠️ LOG CRÍTICO: Verificar que los datos para descontar inventario estén presentes
+      console.log("🚨 [VENTA] Datos enviados al backend para DESCONTAR INVENTARIO:");
+      console.log("📋 Sucursal:", ventaData.sucursal);
+      console.log("📦 Items a descontar:");
+      ventaData.items.forEach((item: any, index: number) => {
+        console.log(`   ${index + 1}. Producto ID: ${item.producto_id}, Código: ${item.codigo}, Nombre: ${item.nombre}, Cantidad: ${item.cantidad}`);
+        if (!item.producto_id) {
+          console.error(`   ❌ ERROR: Item ${index + 1} NO tiene producto_id`);
+        }
+        if (!item.cantidad || item.cantidad <= 0) {
+          console.error(`   ❌ ERROR: Item ${index + 1} tiene cantidad inválida: ${item.cantidad}`);
+        }
+      });
+      console.log("📤 [VENTA] Enviando venta completa al backend:", ventaData);
+
       const res = await fetchWithAuth(`${API_BASE_URL}/punto-venta/ventas`, {
         method: "POST",
         body: JSON.stringify(ventaData),
@@ -1877,11 +1915,15 @@ const PuntoVentaPage: React.FC = () => {
         
         // Mostrar mensaje de error claro al usuario
         const mensajeError = errorData.detail || errorData.message || "Error al registrar la venta";
+        console.error("❌ [VENTA] Error del backend:", errorData);
         alert(`Error: ${mensajeError}`);
         throw new Error(mensajeError);
       }
 
       const data = await res.json();
+      console.log("✅ [VENTA] Venta registrada exitosamente. Respuesta del backend:", data);
+      console.log("📋 [VENTA] Número de factura:", data.numero_factura || data._id);
+      console.log("⚠️ [VENTA] IMPORTANTE: Verificar en el backend que las cantidades se descontaron del inventario");
       alert(`Venta registrada exitosamente. Número de factura: ${data.numero_factura || data._id}`);
       
       // Calcular vuelto si existe
