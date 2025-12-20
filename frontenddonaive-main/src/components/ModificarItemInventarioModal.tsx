@@ -14,6 +14,7 @@ interface Lote {
 
 interface Producto {
   id: string;
+  _id?: string; // ID alternativo
   codigo: string;
   nombre?: string;
   descripcion?: string;

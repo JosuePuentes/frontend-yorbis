@@ -372,108 +372,8 @@ const VisualizarInventariosPage: React.FC = () => {
     }
   }, []);
 
-  // Cargar totales de existencias y costo total para cada inventario
-  useEffect(() => {
-    let cancelado = false; // Flag para cancelar si el componente se desmonta
-    
-    const cargarTotalesInventario = async () => {
-      if (inventarios.length === 0) {
-        // Si no hay inventarios, limpiar totales
-        if (!cancelado) {
-          setTotalesExistencias({});
-          setTotalesUtilidadInventario({});
-          setCostosPromedioInventario({});
-        }
-        return;
-      }
-      
-      const token = localStorage.getItem("access_token");
-      if (!token) return;
-
-      const nuevosTotalesExistencias: { [key: string]: number } = {};
-      const nuevosTotalesUtilidad: { [key: string]: number } = {};
-      const nuevosCostosPromedio: { [key: string]: number } = {};
-      
-      // Cargar totales en paralelo para todos los inventarios
-      const promesas = inventarios.map(async (inventario) => {
-        try {
-          const res = await fetch(`${API_BASE_URL}/inventarios/${inventario._id}/items`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
-
-          if (res.ok) {
-            const items = await res.json();
-            if (Array.isArray(items)) {
-              // Calcular total de existencias - el backend usa 'cantidad'
-              const totalExistencias = items.reduce((sum, item: any) => {
-                const cantidad = item.cantidad ?? item.existencia ?? 0;
-                const cantidadNum = cantidad !== null && cantidad !== undefined ? Number(cantidad) : 0;
-                if (isNaN(cantidadNum)) return sum;
-                return sum + cantidadNum;
-              }, 0);
-              nuevosTotalesExistencias[inventario._id] = totalExistencias;
-              
-              // Calcular utilidad total: suma de (utilidad × cantidad) de todos los items
-              // Utilidad = precio_unitario - costo_unitario
-              const utilidadTotal = items.reduce((sum, item: any) => {
-                const cantidad = item.cantidad ?? item.existencia ?? 0;
-                const costo = item.costo_unitario ?? item.costo ?? 0;
-                const precio = item.precio_unitario ?? item.precio ?? 0;
-                const utilidad = item.utilidad ?? (precio - costo);
-                const cantidadNum = cantidad !== null && cantidad !== undefined ? Number(cantidad) : 0;
-                const utilidadNum = utilidad !== null && utilidad !== undefined ? Number(utilidad) : 0;
-                if (isNaN(cantidadNum) || isNaN(utilidadNum)) return sum;
-                return sum + (cantidadNum * utilidadNum);
-              }, 0);
-              nuevosTotalesUtilidad[inventario._id] = utilidadTotal;
-              
-              // Calcular costo promedio del producto (costo unitario promedio)
-              const itemsConCosto = items.filter((item: any) => {
-                const costo = item.costo_unitario ?? item.costo ?? 0;
-                return Number(costo) > 0;
-              });
-              if (itemsConCosto.length > 0) {
-                const sumaCostos = itemsConCosto.reduce((sum: number, item: any) => {
-                  const costo = item.costo_unitario ?? item.costo ?? 0;
-                  return sum + Number(costo);
-                }, 0);
-                nuevosCostosPromedio[inventario._id] = sumaCostos / itemsConCosto.length;
-              } else {
-                nuevosCostosPromedio[inventario._id] = 0;
-              }
-            } else {
-              nuevosTotalesExistencias[inventario._id] = 0;
-              nuevosTotalesUtilidad[inventario._id] = 0;
-              nuevosCostosPromedio[inventario._id] = 0;
-            }
-          }
-        } catch (err) {
-          console.error(`Error al obtener items del inventario ${inventario._id}:`, err);
-          nuevosTotalesExistencias[inventario._id] = 0;
-          nuevosTotalesUtilidad[inventario._id] = 0;
-          nuevosCostosPromedio[inventario._id] = 0;
-        }
-      });
-
-      await Promise.all(promesas);
-      
-      // Solo actualizar si el componente aún está montado
-      if (!cancelado) {
-        setTotalesExistencias(nuevosTotalesExistencias);
-        setTotalesUtilidadInventario(nuevosTotalesUtilidad);
-        setCostosPromedioInventario(nuevosCostosPromedio);
-      }
-    };
-
-    cargarTotalesInventario();
-    
-    // Cleanup: marcar como cancelado si el componente se desmonta
-    return () => {
-      cancelado = true;
-    };
-  }, [inventarios]);
+  // Este useEffect ya no es necesario porque ahora mostramos items individuales
+  // Se mantiene comentado por si se necesita en el futuro
 
   // Cargar todos los items de todos los inventarios para mostrar en la tabla
   useEffect(() => {
@@ -548,21 +448,6 @@ const VisualizarInventariosPage: React.FC = () => {
       });
   }, []);
 
-  const handleEliminarClick = (inventario: Inventario) => {
-    setInventarioAEliminar(inventario);
-    setShowDeleteModal(true);
-  };
-
-  const handleModificarItems = (inventario: Inventario) => {
-    setInventarioSeleccionado(inventario);
-    setShowModificarModal(true);
-  };
-
-  const handleVerItems = (inventario: Inventario) => {
-    setInventarioParaVer(inventario);
-    setShowVerItemsModal(true);
-  };
-
   const handleCerrarVerItems = () => {
     setShowVerItemsModal(false);
     setInventarioParaVer(null);
@@ -570,85 +455,53 @@ const VisualizarInventariosPage: React.FC = () => {
 
   const handleCerrarModal = async () => {
     console.log('[handleCerrarModal] Iniciando actualización después de modificar item...');
-    // NO cerrar el modal todavía, primero actualizar los datos
-    // Refrescar la lista después de modificar y obtener los inventarios actualizados
-    const inventariosActualizados = await fetchInventarios();
-    console.log('[handleCerrarModal] Inventarios actualizados:', inventariosActualizados.length);
-    // Recalcular totales después de modificar usando los inventarios actualizados
-    await recalcularTotales(inventariosActualizados);
-    console.log('[handleCerrarModal] Totales recalculados');
+    // Refrescar la lista después de modificar
+    await fetchInventarios();
+    console.log('[handleCerrarModal] Inventarios actualizados');
     // Si el modal de ver items está abierto, refrescar también esos datos
     if (showVerItemsModal && inventarioParaVer) {
       console.log('[handleCerrarModal] Refrescando modal de ver items');
       setRefreshItemsTrigger(prev => prev + 1);
     }
-    // Ahora sí cerrar el modal después de actualizar todo
+    // Recargar items después de modificar
+    const token = localStorage.getItem("access_token");
+    if (token) {
+      const todosLosItems: any[] = [];
+      const promesas = inventarios.map(async (inventario) => {
+        try {
+          const res = await fetch(`${API_BASE_URL}/inventarios/${inventario._id}/items`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const items = await res.json();
+            if (Array.isArray(items)) {
+              const farmaciaNombre = farmacias.find(f => f.id === inventario.farmacia || f.nombre === inventario.farmacia)?.nombre || inventario.farmacia;
+              const fechaCarga = inventario.fecha ? new Date(inventario.fecha).toLocaleDateString('es-VE') : 'N/A';
+              items.forEach((item: any) => {
+                todosLosItems.push({
+                  ...item,
+                  inventario_id: inventario._id,
+                  sucursal_nombre: farmaciaNombre,
+                  sucursal_id: inventario.farmacia,
+                  fecha_carga: fechaCarga,
+                });
+              });
+            }
+          }
+        } catch (err) {
+          console.error(`Error al obtener items del inventario ${inventario._id}:`, err);
+        }
+      });
+      await Promise.all(promesas);
+      setItemsInventarios(todosLosItems);
+    }
+    // Cerrar el modal después de actualizar todo
     setShowModificarModal(false);
     setInventarioSeleccionado(null);
     console.log('[handleCerrarModal] Modal cerrado');
   };
 
-  // Función para recalcular totales manualmente (útil después de modificar items)
-  const recalcularTotales = async (inventariosParaCalcular?: Inventario[]) => {
-    const inventariosACalcular = inventariosParaCalcular || inventarios;
-    if (inventariosACalcular.length === 0) return;
-    
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    const nuevosTotalesExistencias: { [key: string]: number } = {};
-    
-    // Cargar totales en paralelo para todos los inventarios
-    const promesas = inventariosACalcular.map(async (inventario) => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/inventarios/${inventario._id}/items`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (res.ok) {
-          const items = await res.json();
-          if (Array.isArray(items)) {
-            // Debug: ver la estructura del primer item
-            if (items.length > 0) {
-              console.log(`[Recalcular Totales] Estructura del primer item del inventario ${inventario._id}:`, items[0]);
-              console.log(`[Recalcular Totales] Campos disponibles:`, Object.keys(items[0]));
-              // Ver valores específicos del primer item
-              const primerItem = items[0] as any;
-              console.log(`[Recalcular Totales] Primer item - cantidad: ${primerItem.cantidad}, existencia: ${primerItem.existencia}, costo_unitario: ${primerItem.costo_unitario}, costo: ${primerItem.costo}`);
-            }
-            
-            // Calcular total de existencias - el backend usa 'cantidad'
-            const totalExistencias = items.reduce((sum, item: any) => {
-              const cantidad = item.cantidad ?? item.existencia ?? 0;
-              const cantidadNum = cantidad !== null && cantidad !== undefined ? Number(cantidad) : 0;
-              if (isNaN(cantidadNum)) {
-                console.warn(`[Recalcular Totales] Cantidad inválida para item ${item.codigo}:`, cantidad);
-                return sum;
-              }
-              return sum + cantidadNum;
-            }, 0);
-            nuevosTotalesExistencias[inventario._id] = totalExistencias;
-            
-            console.log(`[Recalcular Totales] Inventario ${inventario._id}: ${items.length} items, Total Existencias: ${totalExistencias}`);
-          } else {
-            nuevosTotalesExistencias[inventario._id] = 0;
-          }
-        } else {
-          console.error(`[Recalcular Totales] Error al obtener items del inventario ${inventario._id}: ${res.status} ${res.statusText}`);
-          nuevosTotalesExistencias[inventario._id] = 0;
-        }
-      } catch (err) {
-        console.error(`[Recalcular Totales] Error al obtener items del inventario ${inventario._id}:`, err);
-        nuevosTotalesExistencias[inventario._id] = 0;
-      }
-    });
-
-    await Promise.all(promesas);
-    console.log('[Recalcular Totales] Nuevos totales calculados:', { nuevosTotalesExistencias });
-    setTotalesExistencias(nuevosTotalesExistencias);
-  };
+  // Función recalcularTotales eliminada - ya no se necesita porque mostramos items individuales
 
   const handleCancelarEliminar = () => {
     setShowDeleteModal(false);
@@ -678,9 +531,8 @@ const VisualizarInventariosPage: React.FC = () => {
         throw new Error(errorData?.detail || errorData?.message || "Error al eliminar inventario");
       }
 
-      // Refrescar la lista y recalcular totales
-      const inventariosActualizados = await fetchInventarios();
-      await recalcularTotales(inventariosActualizados);
+      // Refrescar la lista
+      await fetchInventarios();
       setShowDeleteModal(false);
       setInventarioAEliminar(null);
     } catch (err: any) {
