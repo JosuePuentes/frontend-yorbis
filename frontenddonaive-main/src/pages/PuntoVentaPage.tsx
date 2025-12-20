@@ -1618,33 +1618,77 @@ const PuntoVentaPage: React.FC = () => {
 
   // Función para obtener facturas procesadas del usuario/cajero
   const obtenerFacturasProcesadas = async () => {
-    if (!cajeroSeleccionado || !sucursalSeleccionada) return;
+    if (!cajeroSeleccionado || !sucursalSeleccionada) {
+      console.warn("⚠️ [FACTURAS] No se puede obtener facturas: falta cajero o sucursal");
+      console.warn("   - Cajero seleccionado:", cajeroSeleccionado);
+      console.warn("   - Sucursal seleccionada:", sucursalSeleccionada);
+      return;
+    }
     
     setCargandoFacturas(true);
     try {
       const usuario = getUsuarioActual();
       const cajero = usuario?.correo || cajeroSeleccionado.NOMBRE;
       
-      const res = await fetchWithAuth(
-        `${API_BASE_URL}/punto-venta/ventas/usuario?cajero=${encodeURIComponent(cajero)}&sucursal=${sucursalSeleccionada.id}&limit=100`
-      );
+      const url = `${API_BASE_URL}/punto-venta/ventas/usuario?cajero=${encodeURIComponent(cajero)}&sucursal=${sucursalSeleccionada.id}&limit=100`;
+      console.log("🔍 [FACTURAS] Obteniendo facturas procesadas...");
+      console.log("   - URL:", url);
+      console.log("   - Cajero:", cajero);
+      console.log("   - Sucursal ID:", sucursalSeleccionada.id);
+      
+      const res = await fetchWithAuth(url);
+      
+      console.log("📦 [FACTURAS] Respuesta del servidor:", {
+        ok: res.ok,
+        status: res.status,
+        statusText: res.statusText
+      });
       
       if (res.ok) {
         const data = await res.json();
-        const facturas = data.facturas || [];
+        console.log("📋 [FACTURAS] Datos recibidos:", data);
+        
+        // Intentar diferentes formatos de respuesta
+        let facturas = [];
+        if (Array.isArray(data)) {
+          // Si la respuesta es directamente un array
+          facturas = data;
+        } else if (data.facturas && Array.isArray(data.facturas)) {
+          // Si viene dentro de un objeto con clave "facturas"
+          facturas = data.facturas;
+        } else if (data.ventas && Array.isArray(data.ventas)) {
+          // Si viene dentro de un objeto con clave "ventas"
+          facturas = data.ventas;
+        } else if (data.data && Array.isArray(data.data)) {
+          // Si viene dentro de un objeto con clave "data"
+          facturas = data.data;
+        }
+        
+        console.log("✅ [FACTURAS] Facturas procesadas encontradas:", facturas.length);
+        
         // Debug: verificar estructura de clientes
         if (facturas.length > 0) {
-          console.log("Ejemplo de factura recibida:", facturas[0]);
-          console.log("Cliente en factura:", facturas[0].cliente);
+          console.log("📄 [FACTURAS] Ejemplo de factura recibida:", facturas[0]);
+          console.log("👤 [FACTURAS] Cliente en factura:", facturas[0].cliente);
+        } else {
+          console.warn("⚠️ [FACTURAS] No se encontraron facturas. Respuesta completa:", data);
         }
+        
         setFacturasProcesadas(facturas);
       } else {
-        console.error("Error al obtener facturas procesadas");
+        const errorData = await res.json().catch(() => ({ detail: "Error desconocido" }));
+        console.error("❌ [FACTURAS] Error al obtener facturas procesadas:", {
+          status: res.status,
+          statusText: res.statusText,
+          error: errorData
+        });
         setFacturasProcesadas([]);
+        alert(`Error al obtener facturas: ${errorData.detail || errorData.message || "Error desconocido"}`);
       }
-    } catch (error) {
-      console.error("Error al obtener facturas procesadas:", error);
+    } catch (error: any) {
+      console.error("❌ [FACTURAS] Error al obtener facturas procesadas:", error);
       setFacturasProcesadas([]);
+      alert(`Error al obtener facturas: ${error.message || "Error de conexión"}`);
     } finally {
       setCargandoFacturas(false);
     }
