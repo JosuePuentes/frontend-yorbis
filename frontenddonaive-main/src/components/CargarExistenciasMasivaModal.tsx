@@ -62,6 +62,8 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
   const [utilidadNuevo, setUtilidadNuevo] = useState("");
   const [porcentajeUtilidadNuevo, setPorcentajeUtilidadNuevo] = useState("40");
   const [aplicarTasaCambio, setAplicarTasaCambio] = useState(false);
+  // Estado para rastrear qué productos tienen tasa de cambio aplicada
+  const [aplicarTasaCambioPorProducto, setAplicarTasaCambioPorProducto] = useState<{ [key: string]: boolean }>({});
 
   // Leer tasa de cambio del localStorage
   const obtenerDiferencialTasaCambio = (): number => {
@@ -296,6 +298,7 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
       setResultadoCarga(null);
       setMostrarFormularioCrear(false);
       setAplicarTasaCambio(false);
+      setAplicarTasaCambioPorProducto({});
     }
   }, [open]);
 
@@ -587,15 +590,41 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
       const productosParaEnviar = Array.from(productosSeleccionados)
         .map((productoId) => {
           const datos = datosCarga[productoId];
+          let costoFinal = datos.costo ? parseFloat(datos.costo) : undefined;
+
+          // ✅ Aplicar tasa de cambio si está activada para este producto
+          if (costoFinal && aplicarTasaCambioPorProducto[productoId]) {
+            const diferencialPorcentaje = obtenerDiferencialTasaCambio();
+            if (diferencialPorcentaje > 0) {
+              costoFinal = costoFinal * (1 + diferencialPorcentaje / 100);
+              console.log(`💰 [TASA_CAMBIO] Producto ${productoId}: Costo original: $${datos.costo}, Diferencial: ${diferencialPorcentaje.toFixed(2)}%, Costo ajustado: $${costoFinal.toFixed(2)}`);
+            }
+          }
+
+          // Calcular precio según utilidad o porcentaje (usando costo ajustado)
+          let precio = 0;
+          let utilidad = 0;
+          let porcentajeUtilidad = datos.porcentaje_utilidad
+            ? parseFloat(datos.porcentaje_utilidad)
+            : 40.0;
+
+          if (datos.utilidad && parseFloat(datos.utilidad) > 0) {
+            // Si se proporciona utilidad en dinero
+            utilidad = parseFloat(datos.utilidad);
+            precio = (costoFinal || 0) + utilidad;
+          } else if (costoFinal && porcentajeUtilidad > 0) {
+            // Si se proporciona porcentaje de utilidad
+            utilidad = (costoFinal * porcentajeUtilidad) / 100;
+            precio = costoFinal + utilidad;
+          }
 
           return {
             producto_id: productoId,
             cantidad: parseFloat(datos.cantidad || "0"),
-            costo: datos.costo ? parseFloat(datos.costo) : undefined,
+            costo: costoFinal,
             utilidad: datos.utilidad ? parseFloat(datos.utilidad) : undefined,
-            porcentaje_utilidad: datos.porcentaje_utilidad
-              ? parseFloat(datos.porcentaje_utilidad)
-              : 40.0,
+            porcentaje_utilidad: porcentajeUtilidad,
+            precio_venta: precio > 0 ? precio : undefined, // ✅ Incluir precio calculado
           };
         })
         .filter((p) => p.cantidad > 0);
@@ -976,6 +1005,7 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
                     <th className="px-3 py-2 text-right">Costo (opcional)</th>
                     <th className="px-3 py-2 text-right">Utilidad (opcional)</th>
                     <th className="px-3 py-2 text-right">% Utilidad</th>
+                    <th className="px-3 py-2 text-right">Precio Calculado</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1033,18 +1063,41 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
                           />
                         </td>
                         <td className="px-3 py-2">
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            placeholder="Opcional"
-                            value={datos.costo}
-                            onChange={(e) =>
-                              actualizarDatoCarga(productoId, "costo", e.target.value)
-                            }
-                            disabled={!estaSeleccionado}
-                            className="w-24 text-right"
-                          />
+                          <div className="flex flex-col gap-1">
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="Opcional"
+                              value={datos.costo}
+                              onChange={(e) => {
+                                actualizarDatoCarga(productoId, "costo", e.target.value);
+                                // Si se ingresa un costo nuevo, preguntar si aplica tasa de cambio
+                                if (e.target.value && parseFloat(e.target.value) > 0) {
+                                  // Mostrar confirmación solo si no está ya activado
+                                  if (!aplicarTasaCambioPorProducto[productoId]) {
+                                    const aplicar = window.confirm(
+                                      `¿Aplicar tasa de cambio al costo de este producto?\n\n` +
+                                      `Costo ingresado: $${e.target.value}\n` +
+                                      `Diferencial: ${obtenerDiferencialTasaCambio().toFixed(2)}%\n` +
+                                      `Costo ajustado: $${(parseFloat(e.target.value) * (1 + obtenerDiferencialTasaCambio() / 100)).toFixed(2)}`
+                                    );
+                                    setAplicarTasaCambioPorProducto(prev => ({
+                                      ...prev,
+                                      [productoId]: aplicar
+                                    }));
+                                  }
+                                }
+                              }}
+                              disabled={!estaSeleccionado}
+                              className="w-24 text-right"
+                            />
+                            {datos.costo && aplicarTasaCambioPorProducto[productoId] && (
+                              <div className="text-xs text-blue-600">
+                                ✓ Tasa aplicada: ${(parseFloat(datos.costo || "0") * (1 + obtenerDiferencialTasaCambio() / 100)).toFixed(2)}
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-2">
                           <Input
@@ -1078,6 +1131,22 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
                             disabled={!estaSeleccionado}
                             className="w-20 text-right"
                           />
+                        </td>
+                        <td className="px-3 py-2 text-right text-sm font-medium text-green-600">
+                          {(() => {
+                            const costo = datos.costo ? parseFloat(datos.costo) : 0;
+                            const costoAjustado = aplicarTasaCambioPorProducto[productoId] && costo > 0
+                              ? costo * (1 + obtenerDiferencialTasaCambio() / 100)
+                              : costo;
+                            const porcentajeUtilidad = datos.porcentaje_utilidad
+                              ? parseFloat(datos.porcentaje_utilidad)
+                              : 40;
+                            const utilidad = datos.utilidad
+                              ? parseFloat(datos.utilidad)
+                              : (costoAjustado * porcentajeUtilidad) / 100;
+                            const precioCalculado = costoAjustado > 0 ? costoAjustado + utilidad : 0;
+                            return precioCalculado > 0 ? `$${precioCalculado.toFixed(2)}` : "-";
+                          })()}
                         </td>
                       </tr>
                     );
