@@ -171,27 +171,29 @@ const VisualizarInventariosPage: React.FC = () => {
     alert("Tasa de cambio actualizada correctamente");
   };
 
-  // ✅ OPTIMIZADO: Cargar productos solo desde punto de venta (más rápido y completo)
+  // ✅ MEJORADO: Cargar productos desde múltiples fuentes con fallback
   const cargarTodosLosProductos = async () => {
     setCargandoProductos(true);
+    setError(null);
     try {
       const token = localStorage.getItem("access_token");
-      if (!token) return;
+      if (!token) {
+        setError("No se encontró token de autenticación");
+        return;
+      }
 
-      console.log("⚡ [INVENTARIOS] Cargando productos (versión optimizada)...");
+      console.log("⚡ [INVENTARIOS] Cargando productos...");
       const inicio = Date.now();
 
-      // ✅ OPTIMIZACIÓN: Cargar solo desde punto de venta (tiene todos los productos y es más rápido)
       const productosUnicos = new Map<string, any>();
       
+      // ✅ ESTRATEGIA 1: Intentar cargar desde punto de venta (más rápido)
       try {
-        // Obtener todas las sucursales
         const sucursalesIds = farmacias.map(f => f.id).filter(id => id);
+        console.log(`🔍 [INVENTARIOS] Intentando cargar desde punto de venta para ${sucursalesIds.length} sucursales`);
         
-        // ✅ OPTIMIZACIÓN: Hacer todas las llamadas en paralelo
         const promesasPuntoVenta = sucursalesIds.map(async (sucursalId) => {
           try {
-            // Intentar con query vacío primero (más rápido)
             const resPuntoVenta = await fetch(
               `${API_BASE_URL}/punto-venta/productos/buscar?q=&sucursal=${sucursalId}&limit=10000`,
               {
@@ -202,6 +204,7 @@ const VisualizarInventariosPage: React.FC = () => {
             if (resPuntoVenta.ok) {
               const dataPV = await resPuntoVenta.json();
               const productosArrayPV = Array.isArray(dataPV) ? dataPV : (dataPV.productos || dataPV.items || []);
+              console.log(`✅ [INVENTARIOS] Sucursal ${sucursalId}: ${productosArrayPV.length} productos desde punto de venta`);
               
               return productosArrayPV.map((producto: any) => {
                 const codigo = (producto.codigo || "").trim();
@@ -228,19 +231,20 @@ const VisualizarInventariosPage: React.FC = () => {
                   sucursal_id: sucursalId,
                 };
               }).filter((p: any) => p !== null);
+            } else {
+              console.warn(`⚠️ [INVENTARIOS] Error HTTP ${resPuntoVenta.status} para sucursal ${sucursalId}`);
+              return [];
             }
-            return [];
           } catch (err) {
-            console.warn(`⚠️ [INVENTARIOS] Error al cargar productos desde punto de venta para sucursal ${sucursalId}:`, err);
+            console.warn(`⚠️ [INVENTARIOS] Error al cargar desde punto de venta para sucursal ${sucursalId}:`, err);
             return [];
           }
         });
         
-        // Esperar todas las promesas en paralelo
         const resultados = await Promise.all(promesasPuntoVenta);
         const productosPlanaos = resultados.flat();
+        console.log(`✅ [INVENTARIOS] Total productos desde punto de venta: ${productosPlanaos.length}`);
         
-        // ✅ OPTIMIZACIÓN: Eliminar duplicados por código (más eficiente)
         productosPlanaos.forEach((producto: any) => {
           if (!producto) return;
           const codigoKey = (producto.codigo || "").trim().toUpperCase();
@@ -248,20 +252,101 @@ const VisualizarInventariosPage: React.FC = () => {
             productosUnicos.set(codigoKey, producto);
           }
         });
-        
-        console.log(`✅ [INVENTARIOS] Productos cargados desde punto de venta: ${productosUnicos.size}`);
       } catch (err) {
-        console.warn("⚠️ [INVENTARIOS] Error al cargar productos desde punto de venta:", err);
+        console.warn("⚠️ [INVENTARIOS] Error general al cargar desde punto de venta:", err);
+      }
+
+      // ✅ ESTRATEGIA 2: Fallback - Cargar desde inventarios si punto de venta no retornó productos
+      if (productosUnicos.size === 0) {
+        console.log("🔄 [INVENTARIOS] No se obtuvieron productos desde punto de venta, cargando desde inventarios...");
+        
+        try {
+          // Recargar inventarios primero
+          const inventariosActualizados = await fetchInventarios();
+          const inventariosParaUsar = inventariosActualizados.length > 0 ? inventariosActualizados : inventarios;
+          
+          // Cargar items de todos los inventarios activos
+          const promesasInventarios = inventariosParaUsar.map(async (inventario) => {
+            const inventarioAny = inventario as any;
+            if (inventarioAny.estado && inventarioAny.estado !== "activo") return [];
+            
+            const inventarioId = inventarioAny._id || inventarioAny.id;
+            if (!inventarioId) return [];
+            
+            try {
+              const resItems = await fetch(
+                `${API_BASE_URL}/inventarios/${inventarioId}/items`,
+                {
+                  headers: { "Authorization": `Bearer ${token}` }
+                }
+              );
+              
+              if (resItems.ok) {
+                const items = await resItems.json();
+                const itemsArray = Array.isArray(items) ? items : [];
+                
+                return itemsArray.map((item: any) => {
+                  const productoId = item._id || item.id || item.codigo;
+                  const costo = Number(item.costo_unitario || item.costo || 0);
+                  const precio = Number(item.precio_unitario || item.precio || 0);
+                  const utilidad = precio - costo;
+                  const farmaciaId = inventarioAny.farmacia || inventarioAny.sucursal_id || "";
+                  
+                  return {
+                    _id: productoId,
+                    codigo: item.codigo || "",
+                    descripcion: item.descripcion || item.nombre || "",
+                    marca: item.marca || item.marca_producto || "",
+                    costo: costo,
+                    costo_unitario: costo,
+                    utilidad: utilidad,
+                    utilidad_porcentaje: costo > 0 ? (utilidad / costo) * 100 : 40,
+                    precio: precio,
+                    precio_unitario: precio,
+                    cantidad: Number(item.cantidad || item.existencia || 0),
+                    existencia: Number(item.cantidad || item.existencia || 0),
+                    sucursal_id: farmaciaId,
+                    inventario_id: inventarioId,
+                    desdeInventario: true,
+                  };
+                });
+              }
+              return [];
+            } catch (err) {
+              console.warn(`⚠️ [INVENTARIOS] Error al cargar items del inventario ${inventarioId}:`, err);
+              return [];
+            }
+          });
+          
+          const resultadosInventarios = await Promise.all(promesasInventarios);
+          const productosInventarios = resultadosInventarios.flat();
+          console.log(`✅ [INVENTARIOS] Productos cargados desde inventarios: ${productosInventarios.length}`);
+          
+          productosInventarios.forEach((producto: any) => {
+            if (!producto) return;
+            const codigoKey = (producto.codigo || "").trim().toUpperCase();
+            if (codigoKey && !productosUnicos.has(codigoKey)) {
+              productosUnicos.set(codigoKey, producto);
+            }
+          });
+        } catch (err) {
+          console.error("❌ [INVENTARIOS] Error al cargar desde inventarios:", err);
+        }
       }
 
       const productosFinales = Array.from(productosUnicos.values());
       const tiempoTotal = Date.now() - inicio;
-      console.log(`⚡ [INVENTARIOS] Carga completada en ${tiempoTotal}ms. Productos: ${productosFinales.length}`);
+      console.log(`⚡ [INVENTARIOS] Carga completada en ${tiempoTotal}ms. Productos finales: ${productosFinales.length}`);
+      
+      if (productosFinales.length === 0) {
+        setError("No se encontraron productos. Verifique que haya productos en el inventario o punto de venta.");
+      }
       
       setTodosLosProductos(productosFinales);
     } catch (err: any) {
       console.error("❌ [INVENTARIOS] Error al cargar productos:", err);
       setError(err.message || "Error al cargar productos");
+      setTodosLosProductos([]);
     } finally {
       setCargandoProductos(false);
     }
