@@ -64,11 +64,15 @@ const ResumenVentaDiariaPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [fechaDesde, setFechaDesde] = useState<string>(() => {
     const hoy = new Date();
-    return hoy.toISOString().split('T')[0];
+    const fecha = hoy.toISOString().split('T')[0];
+    console.log("📅 [RESUMEN_VENTA] Fecha desde inicial:", fecha);
+    return fecha;
   });
   const [fechaHasta, setFechaHasta] = useState<string>(() => {
     const hoy = new Date();
-    return hoy.toISOString().split('T')[0];
+    const fecha = hoy.toISOString().split('T')[0];
+    console.log("📅 [RESUMEN_VENTA] Fecha hasta inicial:", fecha);
+    return fecha;
   });
   const [busqueda, setBusqueda] = useState("");
   const [sucursales, setSucursales] = useState<any[]>([]);
@@ -96,30 +100,58 @@ const ResumenVentaDiariaPage: React.FC = () => {
 
   // Cargar ventas
   const cargarVentas = async () => {
-    if (!sucursalSeleccionada) return;
+    if (!sucursalSeleccionada) {
+      console.warn("⚠️ [RESUMEN_VENTA] No hay sucursal seleccionada");
+      return;
+    }
     
     setLoading(true);
     setError(null);
     try {
       const url = `${API_BASE_URL}/punto-venta/ventas/usuario?sucursal=${sucursalSeleccionada}&limit=10000&fecha_inicio=${fechaDesde}&fecha_fin=${fechaHasta}`;
-      console.log("🔍 [RESUMEN_VENTA] Cargando ventas:", url);
+      console.log("🔍 [RESUMEN_VENTA] Cargando ventas:");
+      console.log("   URL:", url);
+      console.log("   Sucursal:", sucursalSeleccionada);
+      console.log("   Fecha desde:", fechaDesde);
+      console.log("   Fecha hasta:", fechaHasta);
       
       const res = await fetchWithAuth(url);
       
+      console.log("📡 [RESUMEN_VENTA] Respuesta HTTP:", res.status, res.statusText);
+      
       if (!res.ok) {
-        throw new Error("Error al obtener ventas");
+        const errorText = await res.text();
+        console.error("❌ [RESUMEN_VENTA] Error HTTP:", res.status, errorText);
+        throw new Error(`Error al obtener ventas: ${res.status} ${res.statusText}`);
       }
       
       const data = await res.json();
+      console.log("📦 [RESUMEN_VENTA] Datos recibidos del backend:", data);
+      console.log("📦 [RESUMEN_VENTA] Tipo de datos:", Array.isArray(data) ? "Array" : typeof data);
+      
       const ventasArray = Array.isArray(data) ? data : (data.facturas || data.ventas || data.data || []);
       
       console.log(`✅ [RESUMEN_VENTA] Ventas cargadas: ${ventasArray.length}`);
-      console.log(`📊 [RESUMEN_VENTA] Ejemplo de venta:`, ventasArray[0]);
+      if (ventasArray.length > 0) {
+        console.log(`📊 [RESUMEN_VENTA] Ejemplo de venta:`, ventasArray[0]);
+        console.log(`📊 [RESUMEN_VENTA] Estado de la venta:`, ventasArray[0].estado);
+        console.log(`📊 [RESUMEN_VENTA] Número de factura:`, ventasArray[0].numero_factura || ventasArray[0].numeroFactura);
+        console.log(`📊 [RESUMEN_VENTA] Items/Productos:`, ventasArray[0].items || ventasArray[0].productos);
+      } else {
+        console.warn("⚠️ [RESUMEN_VENTA] No se encontraron ventas. Verificar:");
+        console.warn("   1. ¿Existen ventas con estado 'procesada' en el backend?");
+        console.warn("   2. ¿Las fechas son correctas? (fecha desde:", fechaDesde, "hasta:", fechaHasta, ")");
+        console.warn("   3. ¿La sucursal es correcta?", sucursalSeleccionada);
+      }
       
       // ✅ Validar que las ventas tengan items o productos (el backend puede usar cualquiera)
       const ventasConItems = ventasArray.filter((v: any) => {
         const items = v.items || v.productos || [];
-        return Array.isArray(items) && items.length > 0;
+        const tieneItems = Array.isArray(items) && items.length > 0;
+        if (!tieneItems && ventasArray.length > 0) {
+          console.warn("⚠️ [RESUMEN_VENTA] Venta sin items:", v._id, "Estado:", v.estado);
+        }
+        return tieneItems;
       });
       console.log(`✅ [RESUMEN_VENTA] Ventas con items: ${ventasConItems.length}`);
       
@@ -281,14 +313,26 @@ const ResumenVentaDiariaPage: React.FC = () => {
       <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-slate-800">📊 Resumen de Venta Diaria</h1>
-          <Button
-            onClick={handleExportarExcel}
-            className="flex items-center gap-2"
-            variant="outline"
-          >
-            <Download className="h-4 w-4" />
-            Exportar a Excel
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => {
+                console.log("🔄 [RESUMEN_VENTA] Recargando ventas manualmente...");
+                cargarVentas();
+              }}
+              className="flex items-center gap-2"
+              variant="outline"
+            >
+              🔄 Recargar
+            </Button>
+            <Button
+              onClick={handleExportarExcel}
+              className="flex items-center gap-2"
+              variant="outline"
+            >
+              <Download className="h-4 w-4" />
+              Exportar a Excel
+            </Button>
+          </div>
         </div>
 
         {/* Navbar con estadísticas */}
