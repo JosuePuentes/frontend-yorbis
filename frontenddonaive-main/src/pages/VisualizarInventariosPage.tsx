@@ -178,11 +178,16 @@ const VisualizarInventariosPage: React.FC = () => {
       const token = localStorage.getItem("access_token");
       if (!token) return;
 
+      // ✅ CRÍTICO: Recargar inventarios primero para asegurar que tenemos los más recientes (incluyendo productos nuevos)
+      console.log("🔄 [INVENTARIOS] Recargando inventarios antes de cargar productos...");
+      const inventariosActualizados = await fetchInventarios();
+      const inventariosParaUsar = inventariosActualizados.length > 0 ? inventariosActualizados : inventarios;
+
       // ✅ NUEVO: Cargar productos desde inventarios directamente (para productos nuevos y existencias actualizadas)
       const productosDesdeInventarios: any[] = [];
       try {
-        // Usar los inventarios que ya están cargados en el estado
-        for (const inventario of inventarios) {
+        // Usar los inventarios actualizados
+        for (const inventario of inventariosParaUsar) {
           const inventarioAny = inventario as any;
           if (inventarioAny.estado && inventarioAny.estado !== "activo") continue;
           
@@ -372,7 +377,7 @@ const VisualizarInventariosPage: React.FC = () => {
         });
       });
       
-      // ✅ NUEVO: Cargar productos desde endpoint de punto de venta (para productos que aparecen allí pero no en inventarios)
+      // ✅ CRÍTICO: Cargar productos desde endpoint de punto de venta (para productos nuevos que aparecen allí)
       const productosDesdePuntoVenta: any[] = [];
       try {
         // Obtener todas las sucursales para buscar productos en cada una
@@ -380,33 +385,61 @@ const VisualizarInventariosPage: React.FC = () => {
         
         for (const sucursalId of sucursalesIds) {
           try {
-            // Hacer búsqueda amplia para obtener todos los productos
-            const resPuntoVenta = await fetch(
+            // ✅ MEJORADO: Intentar múltiples búsquedas para obtener todos los productos
+            // Búsqueda 1: Con query vacío (puede devolver todos o nada)
+            let resPuntoVenta = await fetch(
               `${API_BASE_URL}/punto-venta/productos/buscar?q=&sucursal=${sucursalId}&limit=1000`,
               {
                 headers: { "Authorization": `Bearer ${token}` }
               }
             );
             
+            // Si no funciona con query vacío, intentar con búsquedas comunes
+            if (!resPuntoVenta.ok || resPuntoVenta.status === 400) {
+              // Intentar con búsquedas comunes para obtener más productos
+              const busquedasComunes = ['a', 'e', 'i', 'o', 'u', '1', '2', '3'];
+              for (const busqueda of busquedasComunes) {
+                try {
+                  resPuntoVenta = await fetch(
+                    `${API_BASE_URL}/punto-venta/productos/buscar?q=${busqueda}&sucursal=${sucursalId}&limit=1000`,
+                    {
+                      headers: { "Authorization": `Bearer ${token}` }
+                    }
+                  );
+                  if (resPuntoVenta.ok) break;
+                } catch (err) {
+                  continue;
+                }
+              }
+            }
+            
             if (resPuntoVenta.ok) {
               const dataPV = await resPuntoVenta.json();
-              const productosArrayPV = Array.isArray(dataPV) ? dataPV : (dataPV.productos || []);
+              const productosArrayPV = Array.isArray(dataPV) ? dataPV : (dataPV.productos || dataPV.items || []);
               
               productosArrayPV.forEach((producto: any) => {
-                const codigo = (producto.codigo || "").trim().toUpperCase();
+                const codigo = (producto.codigo || "").trim();
                 if (codigo) {
+                  const costo = Number(producto.costo || producto.costo_unitario || 0);
+                  const precio = Number(producto.precio || producto.precio_unitario || producto.precio_venta || 0);
+                  const utilidad = precio - costo;
+                  const utilidadPorcentaje = costo > 0 ? (utilidad / costo) * 100 : 40;
+                  
                   productosDesdePuntoVenta.push({
                     _id: producto._id || producto.id || producto.codigo,
                     codigo: producto.codigo || "",
                     descripcion: producto.descripcion || producto.nombre || "",
                     marca: producto.marca || "",
-                    costo: Number(producto.costo || producto.costo_unitario || 0),
-                    costo_unitario: Number(producto.costo || producto.costo_unitario || 0),
-                    precio: Number(producto.precio || producto.precio_unitario || producto.precio_venta || 0),
-                    precio_unitario: Number(producto.precio || producto.precio_unitario || producto.precio_venta || 0),
+                    costo: costo,
+                    costo_unitario: costo,
+                    utilidad: utilidad,
+                    utilidad_porcentaje: utilidadPorcentaje,
+                    precio: precio,
+                    precio_unitario: precio,
                     cantidad: Number(producto.existencia || producto.cantidad || producto.stock || 0),
                     existencia: Number(producto.existencia || producto.cantidad || producto.stock || 0),
                     desdePuntoVenta: true,
+                    sucursal_id: sucursalId,
                   });
                 }
               });
