@@ -40,6 +40,8 @@ const VisualizarInventariosPage: React.FC = () => {
   const [refreshItemsTrigger, setRefreshItemsTrigger] = useState(0);
   const [totalesExistencias, setTotalesExistencias] = useState<{ [key: string]: number }>({});
   const [totalesCostoInventario, setTotalesCostoInventario] = useState<{ [key: string]: number }>({});
+  const [totalesUtilidadInventario, setTotalesUtilidadInventario] = useState<{ [key: string]: number }>({});
+  const [costosPromedioInventario, setCostosPromedioInventario] = useState<{ [key: string]: number }>({});
   const [descuentosPorInventario, setDescuentosPorInventario] = useState<{ [key: string]: number }>({});
   const [guardandoDescuento, setGuardandoDescuento] = useState<{ [key: string]: boolean }>({});
   
@@ -383,6 +385,8 @@ const VisualizarInventariosPage: React.FC = () => {
         if (!cancelado) {
           setTotalesExistencias({});
           setTotalesCostoInventario({});
+          setTotalesUtilidadInventario({});
+          setCostosPromedioInventario({});
         }
         return;
       }
@@ -392,6 +396,8 @@ const VisualizarInventariosPage: React.FC = () => {
 
       const nuevosTotalesExistencias: { [key: string]: number } = {};
       const nuevosTotalesCosto: { [key: string]: number } = {};
+      const nuevosTotalesUtilidad: { [key: string]: number } = {};
+      const nuevosCostosPromedio: { [key: string]: number } = {};
       
       // Cargar totales en paralelo para todos los inventarios
       const promesas = inventarios.map(async (inventario) => {
@@ -415,7 +421,6 @@ const VisualizarInventariosPage: React.FC = () => {
               nuevosTotalesExistencias[inventario._id] = totalExistencias;
               
               // Calcular costo total del inventario: suma de (cantidad × costo_unitario) de todos los items
-              // El backend usa 'cantidad' para existencia y 'costo_unitario' para costo
               const costoTotal = items.reduce((sum, item: any) => {
                 const cantidad = item.cantidad ?? item.existencia ?? 0;
                 const costo = item.costo_unitario ?? item.costo ?? 0;
@@ -426,15 +431,48 @@ const VisualizarInventariosPage: React.FC = () => {
                 return sum + subtotal;
               }, 0);
               nuevosTotalesCosto[inventario._id] = costoTotal;
+              
+              // Calcular utilidad total: suma de (utilidad × cantidad) de todos los items
+              // Utilidad = precio_unitario - costo_unitario
+              const utilidadTotal = items.reduce((sum, item: any) => {
+                const cantidad = item.cantidad ?? item.existencia ?? 0;
+                const costo = item.costo_unitario ?? item.costo ?? 0;
+                const precio = item.precio_unitario ?? item.precio ?? 0;
+                const utilidad = item.utilidad ?? (precio - costo);
+                const cantidadNum = cantidad !== null && cantidad !== undefined ? Number(cantidad) : 0;
+                const utilidadNum = utilidad !== null && utilidad !== undefined ? Number(utilidad) : 0;
+                if (isNaN(cantidadNum) || isNaN(utilidadNum)) return sum;
+                return sum + (cantidadNum * utilidadNum);
+              }, 0);
+              nuevosTotalesUtilidad[inventario._id] = utilidadTotal;
+              
+              // Calcular costo promedio del producto (costo unitario promedio)
+              const itemsConCosto = items.filter((item: any) => {
+                const costo = item.costo_unitario ?? item.costo ?? 0;
+                return Number(costo) > 0;
+              });
+              if (itemsConCosto.length > 0) {
+                const sumaCostos = itemsConCosto.reduce((sum: number, item: any) => {
+                  const costo = item.costo_unitario ?? item.costo ?? 0;
+                  return sum + Number(costo);
+                }, 0);
+                nuevosCostosPromedio[inventario._id] = sumaCostos / itemsConCosto.length;
+              } else {
+                nuevosCostosPromedio[inventario._id] = 0;
+              }
             } else {
               nuevosTotalesExistencias[inventario._id] = 0;
               nuevosTotalesCosto[inventario._id] = 0;
+              nuevosTotalesUtilidad[inventario._id] = 0;
+              nuevosCostosPromedio[inventario._id] = 0;
             }
           }
         } catch (err) {
           console.error(`Error al obtener items del inventario ${inventario._id}:`, err);
           nuevosTotalesExistencias[inventario._id] = 0;
           nuevosTotalesCosto[inventario._id] = 0;
+          nuevosTotalesUtilidad[inventario._id] = 0;
+          nuevosCostosPromedio[inventario._id] = 0;
         }
       });
 
@@ -444,6 +482,8 @@ const VisualizarInventariosPage: React.FC = () => {
       if (!cancelado) {
         setTotalesExistencias(nuevosTotalesExistencias);
         setTotalesCostoInventario(nuevosTotalesCosto);
+        setTotalesUtilidadInventario(nuevosTotalesUtilidad);
+        setCostosPromedioInventario(nuevosCostosPromedio);
       }
     };
 
@@ -1072,13 +1112,13 @@ const VisualizarInventariosPage: React.FC = () => {
                       Fecha de Carga
                     </th>
                     <th scope="col" className="px-5 py-3.5 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">
-                      Total Costo Inventario
+                      Costo del Producto
                     </th>
                     <th scope="col" className="px-5 py-3.5 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">
-                      Total Existencias
+                      Utilidad
                     </th>
-                    <th scope="col" className="px-5 py-3.5 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">
-                      % Descuento
+                    <th scope="col" className="px-5 py-3.5 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">
+                      Existencia
                     </th>
                     <th scope="col" className="px-5 py-3.5 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">
                       Acciones
@@ -1090,11 +1130,9 @@ const VisualizarInventariosPage: React.FC = () => {
                     // Obtener el nombre de la farmacia desde el ID
                     const farmaciaNombre = farmacias.find(f => f.id === i.farmacia || f.nombre === i.farmacia)?.nombre || i.farmacia;
                     const fechaCarga = i.fecha ? new Date(i.fecha).toLocaleDateString('es-VE') : 'N/A';
-                    // Calcular costo total: suma de (existencia × costo) de todos los items
-                    const costoTotalInventario = totalesCostoInventario[i._id] ?? 0;
+                    const costoPromedio = costosPromedioInventario[i._id] ?? 0;
+                    const utilidadTotal = totalesUtilidadInventario[i._id] ?? 0;
                     const totalExist = totalesExistencias[i._id] ?? 0;
-                    const descuentoActual = descuentosPorInventario[i._id] ?? i.porcentaje_descuento ?? 0;
-                    const estaGuardando = guardandoDescuento[i._id] ?? false;
                     
                     return (
                       <tr key={i._id} className="hover:bg-slate-50 transition-colors duration-150 ease-in-out">
@@ -1105,43 +1143,13 @@ const VisualizarInventariosPage: React.FC = () => {
                           {fechaCarga}
                         </td>
                         <td className="px-5 py-4 whitespace-nowrap text-sm text-slate-700 text-right font-semibold">
-                          ${costoTotalInventario.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ${costoPromedio.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-sm text-green-600 text-right font-semibold">
+                          ${utilidadTotal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td className="px-5 py-4 whitespace-nowrap text-sm text-slate-700 text-right font-semibold">
                           {totalExist.toLocaleString('es-VE')}
-                        </td>
-                        <td className="px-5 py-4 whitespace-nowrap text-sm text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <Input
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.01"
-                              value={descuentoActual}
-                              onChange={(e) => {
-                                const nuevoValor = parseFloat(e.target.value) || 0;
-                                handleCambiarDescuento(i._id, nuevoValor);
-                              }}
-                              onBlur={(e) => {
-                                const nuevoValor = parseFloat(e.target.value) || 0;
-                                if (nuevoValor < 0) {
-                                  handleCambiarDescuento(i._id, 0);
-                                } else if (nuevoValor > 100) {
-                                  handleCambiarDescuento(i._id, 100);
-                                }
-                              }}
-                              disabled={estaGuardando}
-                              className="w-20 text-center"
-                              placeholder="0"
-                            />
-                            <span className="text-xs text-slate-500">%</span>
-                            {estaGuardando && (
-                              <svg className="animate-spin h-4 w-4 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                              </svg>
-                            )}
-                          </div>
                         </td>
                         <td className="px-5 py-4 whitespace-nowrap text-sm text-center">
                           <div className="flex items-center justify-center gap-2">
