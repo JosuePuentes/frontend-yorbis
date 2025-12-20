@@ -414,144 +414,21 @@ const PuntoVentaPage: React.FC = () => {
               console.warn(`⚠️ [PUNTO_VENTA] No se encontraron productos para la búsqueda: "${busqueda}"`);
             }
             
-            // ✅ CRÍTICO: Consultar inventario directamente para obtener existencia REAL
-            console.log("🔄 [PUNTO_VENTA] Consultando inventario directamente para obtener existencia real...");
-            try {
-              const token = localStorage.getItem("access_token");
-              if (token && sucursalSeleccionada?.id) {
-                // Obtener inventarios de la sucursal
-                const resInventarios = await fetch(`${API_BASE_URL}/inventarios`, {
-                  headers: { "Authorization": `Bearer ${token}` },
-                  signal: abortController.signal
-                });
-
-                if (resInventarios.ok && !abortController.signal.aborted) {
-                  const inventariosData = await resInventarios.json();
-                  const inventariosArray = Array.isArray(inventariosData) ? inventariosData : [];
-                  
-                  // Filtrar inventario activo de la sucursal
-                  const inventarioActivo = inventariosArray.find((inv: any) => 
-                    (inv.farmacia === sucursalSeleccionada.id || inv.sucursal_id === sucursalSeleccionada.id) &&
-                    inv.estado === "activo"
-                  );
-
-                  if (inventarioActivo) {
-                    // Obtener items del inventario activo
-                    const resItems = await fetch(`${API_BASE_URL}/inventarios/${inventarioActivo._id}/items`, {
-                      headers: { "Authorization": `Bearer ${token}` },
-                      signal: abortController.signal
-                    });
-
-                    if (resItems.ok && !abortController.signal.aborted) {
-                      const itemsInventario = await resItems.json();
-                      const itemsArray = Array.isArray(itemsInventario) ? itemsInventario : [];
-                      
-                      // Crear mapa de existencia real por producto_id o codigo
-                      const existenciaRealMap = new Map<string, number>();
-                      itemsArray.forEach((item: any) => {
-                        const itemId = item._id || item.id;
-                        const codigo = item.codigo || item.codigo_producto;
-                        // ✅ CRÍTICO: Prioridad: cantidad > existencia > stock (según estructura del inventario)
-                        const existenciaReal = Number(item.cantidad || item.existencia || item.stock || 0);
-                        
-                        // Mapear por ID (convertir a string para asegurar coincidencia)
-                        if (itemId) {
-                          const idStr = String(itemId);
-                          existenciaRealMap.set(idStr, existenciaReal);
-                          console.log(`🗺️ [PUNTO_VENTA] Mapeando por ID: "${idStr}" = ${existenciaReal}`);
-                        }
-                        // Mapear por código (normalizar a mayúsculas y sin espacios)
-                        if (codigo) {
-                          const codigoStr = String(codigo).trim().toUpperCase();
-                          existenciaRealMap.set(codigoStr, existenciaReal);
-                          console.log(`🗺️ [PUNTO_VENTA] Mapeando por código: "${codigoStr}" = ${existenciaReal}`);
-                        }
-                      });
-                      
-                      console.log(`🔍 [PUNTO_VENTA] Mapa de existencia creado. Ejemplo de claves:`, Array.from(existenciaRealMap.keys()).slice(0, 5));
-                      
-                      // ✅ DEBUG: Mostrar algunos items del inventario para verificar
-                      console.log(`📦 [PUNTO_VENTA] Items del inventario (primeros 3):`, itemsArray.slice(0, 3).map((item: any) => ({
-                        id: item._id || item.id,
-                        codigo: item.codigo || item.codigo_producto,
-                        cantidad: item.cantidad,
-                        existencia: item.existencia,
-                        stock: item.stock
-                      })));
-
-                      console.log(`✅ [PUNTO_VENTA] Mapa de existencia real creado con ${existenciaRealMap.size} productos`);
-
-                      // Actualizar productos con existencia real del inventario
-                      const productosNormalizados = productosArray.map((producto: any) => {
-                        // Buscar existencia real en el mapa (por ID o código)
-                        const productoId = String(producto.id || producto._id || "");
-                        // ✅ CRÍTICO: Normalizar código a mayúsculas y sin espacios para coincidencia
-                        const productoCodigo = String(producto.codigo || "").trim().toUpperCase();
-                        
-                        // Intentar encontrar en el mapa
-                        const existenciaPorId = existenciaRealMap.get(productoId);
-                        const existenciaPorCodigo = existenciaRealMap.get(productoCodigo);
-                        const existenciaReal = existenciaPorId ?? existenciaPorCodigo ?? 
-                                             (producto.existencia ?? producto.cantidad ?? producto.stock ?? 0);
-                        
-                        // ✅ DEBUG DETALLADO
-                        console.log(`📊 [PUNTO_VENTA] Producto "${productoCodigo}" (ID: "${productoId}"):`, {
-                          existenciaBackend: producto.existencia,
-                          cantidadBackend: producto.cantidad,
-                          stockBackend: producto.stock,
-                          existenciaPorId: existenciaPorId,
-                          existenciaPorCodigo: existenciaPorCodigo,
-                          existenciaRealFinal: existenciaReal,
-                          existeEnMapaPorId: existenciaRealMap.has(productoId),
-                          existeEnMapaPorCodigo: existenciaRealMap.has(productoCodigo),
-                          todasLasClavesDelMapa: Array.from(existenciaRealMap.keys())
-                        });
-                        
-                        return {
-                          ...producto,
-                          existencia: existenciaReal,  // ✅ Usar existencia REAL del inventario
-                          cantidad: existenciaReal,   // Sincronizar
-                          stock: existenciaReal       // Sincronizar
-                        };
-                      });
-
-                      // Guardar en caché
-                      cacheBusquedas.current.set(cacheKey, {
-                        productos: productosNormalizados,
-                        timestamp: Date.now()
-                      });
-                      
-                      // Limpiar caché antiguo (más de 10 minutos)
-                      const ahora = Date.now();
-                      for (const [key, value] of cacheBusquedas.current.entries()) {
-                        if (ahora - value.timestamp > CACHE_DURATION * 2) {
-                          cacheBusquedas.current.delete(key);
-                        }
-                      }
-                      
-                      setProductosEncontrados(productosNormalizados);
-                      return; // Salir temprano si se actualizó correctamente
-                    }
-                  }
-                }
-              }
-            } catch (error: any) {
-              if (error.name !== 'AbortError') {
-                console.warn("⚠️ [PUNTO_VENTA] Error al consultar inventario para existencia real:", error);
-              }
-            }
-
-            // Fallback: Si no se pudo consultar el inventario, usar los valores del endpoint de búsqueda
-            console.log("⚠️ [PUNTO_VENTA] Usando valores del endpoint de búsqueda (pueden no ser reales)");
+            // ✅ Backend sincronizado: El endpoint ya devuelve la existencia real del inventario
+            // Solo necesitamos normalizar para asegurar que los tres campos estén sincronizados
+            console.log("✅ [PUNTO_VENTA] Backend sincronizado - usando existencia del endpoint directamente");
+            
             const productosNormalizados = productosArray.map((producto: any) => {
-              // Prioridad: existencia > cantidad > stock (según instrucciones del backend)
+              // ✅ Backend ya devuelve existencia real sincronizada
+              // Prioridad: existencia > cantidad > stock (según backend sincronizado)
               const existencia = producto.existencia ?? producto.cantidad ?? producto.stock ?? 0;
               
+              // Verificar que los tres campos estén sincronizados (el backend ya lo hace, pero por seguridad)
               return {
                 ...producto,
-                existencia: existencia,  // Campo principal
-                cantidad: existencia,   // Sincronizar
-                stock: existencia       // Sincronizar
+                existencia: existencia,  // Campo principal (ya viene correcto del backend)
+                cantidad: existencia,     // Sincronizar (backend ya lo sincroniza)
+                stock: existencia       // Sincronizar (backend ya lo sincroniza)
               };
             });
             
