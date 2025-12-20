@@ -475,7 +475,7 @@ const PuntoVentaPage: React.FC = () => {
                         const productoCodigo = String(producto.codigo || "");
                         const existenciaReal = existenciaRealMap.get(productoId) || 
                                              existenciaRealMap.get(productoCodigo) ||
-                                             producto.existencia ?? producto.cantidad ?? producto.stock ?? 0;
+                                             (producto.existencia ?? producto.cantidad ?? producto.stock ?? 0);
                         
                         console.log(`📊 [PUNTO_VENTA] Producto ${productoCodigo} (ID: ${productoId}): existencia del backend=${producto.existencia}, existencia real del inventario=${existenciaReal}`);
                         
