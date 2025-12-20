@@ -24,7 +24,8 @@ const permisosDisponibles = [
   { id: 'ver_ventas_totales', label: 'Ver Ventas Totales', description: 'Permite ver ventas totales' },
   { id: 'ver_about', label: 'Ver Información', description: 'Permite ver información del sistema' },
   { id: 'metas', label: 'Gestionar Metas', description: 'Permite gestionar metas de ventas' },
-  { id: 'compras', label: 'Módulo de Compras', description: 'Permite gestionar compras y proveedores' }
+  { id: 'compras', label: 'Módulo de Compras', description: 'Permite gestionar compras y proveedores' },
+  { id: 'resumen_venta_diaria', label: 'Resumen de Venta Diaria', description: 'Permite ver el resumen diario de ventas con detalles de productos vendidos' }
 ];
 
 const ModalAsignarPermisos: React.FC<ModalAsignarPermisosProps> = ({

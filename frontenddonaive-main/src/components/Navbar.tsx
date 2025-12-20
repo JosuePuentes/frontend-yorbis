@@ -27,6 +27,7 @@ const allLinks = [
         items: [
             { to: '/gastoscxc-cuadres', label: 'Gastos, Cuentas y Cuadres', permiso: ['agregar_cuadre', 'ver_cuadres', 'ver_gastos', 'ver_cuentas_por_pagar'] },
             { to: '/resumendeventa', label: 'Resumen de Ventas', permiso: ['ver_resumen_mensual', 'ver_ventas', 'ver_inicio'] },
+            { to: '/resumen-venta-diaria', label: 'Resumen de Venta Diaria', permiso: ['resumen_venta_diaria'] },
             { to: '/ventatotal', label: 'Venta Total', permiso: ['ver_ventas_totales', 'ver_ventas'] },
             { to: '/metas', label: 'Metas', permiso: ['ver_about', 'ver_metas'] },
             { to: '/gestionmetas', label: 'Crear Meta', permiso: ['metas', 'agregar_meta', 'editar_meta'] },
