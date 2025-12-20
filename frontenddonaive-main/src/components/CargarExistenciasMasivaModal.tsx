@@ -61,6 +61,23 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
   const [costoNuevo, setCostoNuevo] = useState("");
   const [utilidadNuevo, setUtilidadNuevo] = useState("");
   const [porcentajeUtilidadNuevo, setPorcentajeUtilidadNuevo] = useState("40");
+  const [aplicarTasaCambio, setAplicarTasaCambio] = useState(false);
+
+  // Leer tasa de cambio del localStorage
+  const obtenerDiferencialTasaCambio = (): number => {
+    try {
+      const dolarBcv = parseFloat(localStorage.getItem("tasaCambio_dolarBcv_verInventario") || "0");
+      const dolarNegro = parseFloat(localStorage.getItem("tasaCambio_dolarNegro_verInventario") || "0");
+      
+      if (dolarBcv > 0 && dolarNegro > 0) {
+        const diferencia = dolarNegro - dolarBcv;
+        return (diferencia / dolarBcv) * 100; // Retornar porcentaje
+      }
+      return 0;
+    } catch {
+      return 0;
+    }
+  };
 
   // Caché de búsquedas para mejorar rendimiento
   const cacheBusquedas = useRef<Map<string, { productos: Producto[]; timestamp: number }>>(new Map());
@@ -277,6 +294,8 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
       setError(null);
       setSuccess(null);
       setResultadoCarga(null);
+      setMostrarFormularioCrear(false);
+      setAplicarTasaCambio(false);
     }
   }, [open]);
 
@@ -361,7 +380,17 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
         throw new Error("No se encontró el token de autenticación");
       }
 
-      // Calcular precio según utilidad o porcentaje
+      // ✅ Aplicar tasa de cambio si está activada
+      let costoAjustado = costo;
+      if (aplicarTasaCambio) {
+        const diferencialPorcentaje = obtenerDiferencialTasaCambio();
+        if (diferencialPorcentaje > 0) {
+          costoAjustado = costo * (1 + diferencialPorcentaje / 100);
+          console.log(`💰 [TASA_CAMBIO] Costo original: $${costo}, Diferencial: ${diferencialPorcentaje.toFixed(2)}%, Costo ajustado: $${costoAjustado.toFixed(2)}`);
+        }
+      }
+
+      // Calcular precio según utilidad o porcentaje (usando costo ajustado)
       let precio = 0;
       let utilidad = 0;
       let porcentajeUtilidad = 40;
@@ -369,25 +398,25 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
       if (utilidadNuevo && parseFloat(utilidadNuevo) > 0) {
         // Si se proporciona utilidad en dinero
         utilidad = parseFloat(utilidadNuevo);
-        precio = costo + utilidad;
-        porcentajeUtilidad = costo > 0 ? (utilidad / costo) * 100 : 0;
+        precio = costoAjustado + utilidad;
+        porcentajeUtilidad = costoAjustado > 0 ? (utilidad / costoAjustado) * 100 : 0;
       } else if (porcentajeUtilidadNuevo && parseFloat(porcentajeUtilidadNuevo) > 0) {
         // Si se proporciona porcentaje de utilidad
         porcentajeUtilidad = parseFloat(porcentajeUtilidadNuevo);
-        utilidad = (costo * porcentajeUtilidad) / 100;
-        precio = costo + utilidad;
+        utilidad = (costoAjustado * porcentajeUtilidad) / 100;
+        precio = costoAjustado + utilidad;
       } else {
         // Por defecto 40%
         porcentajeUtilidad = 40;
-        utilidad = (costo * porcentajeUtilidad) / 100;
-        precio = costo + utilidad;
+        utilidad = (costoAjustado * porcentajeUtilidad) / 100;
+        precio = costoAjustado + utilidad;
       }
 
-      // Preparar body según la estructura del backend
+      // Preparar body según la estructura del backend (usar costo ajustado)
       const bodyRequest: any = {
         farmacia: sucursalId,
         nombre: nombreNuevo.trim(),
-        costo: costo,
+        costo: costoAjustado, // ✅ Usar costo ajustado con tasa de cambio
       };
 
       // Campos opcionales
@@ -494,6 +523,7 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
       setCostoNuevo("");
       setUtilidadNuevo("");
       setPorcentajeUtilidadNuevo("40");
+      setAplicarTasaCambio(false);
       setError(null);
       setSuccess("Producto creado exitosamente y seleccionado");
       
@@ -809,6 +839,35 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
                   required
                 />
               </div>
+
+              {/* ✅ Botón para aplicar tasa de cambio */}
+              <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-md border border-blue-200">
+                <input
+                  type="checkbox"
+                  id="aplicarTasaCambio"
+                  checked={aplicarTasaCambio}
+                  onChange={(e) => setAplicarTasaCambio(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="aplicarTasaCambio" className="text-sm font-medium text-slate-700 cursor-pointer">
+                  Aplicar Tasa de Cambio
+                </label>
+                {aplicarTasaCambio && (
+                  <span className="text-xs text-blue-600 ml-2">
+                    (Diferencial: {obtenerDiferencialTasaCambio().toFixed(2)}%)
+                  </span>
+                )}
+              </div>
+              {aplicarTasaCambio && obtenerDiferencialTasaCambio() > 0 && costoNuevo && (
+                <div className="p-2 bg-green-50 rounded-md border border-green-200 text-sm">
+                  <p className="text-slate-700">
+                    <strong>Costo original:</strong> ${parseFloat(costoNuevo || "0").toFixed(2)}
+                  </p>
+                  <p className="text-slate-700">
+                    <strong>Costo ajustado:</strong> ${(parseFloat(costoNuevo || "0") * (1 + obtenerDiferencialTasaCambio() / 100)).toFixed(2)}
+                  </p>
+                </div>
+              )}
               
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">

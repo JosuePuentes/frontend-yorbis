@@ -6,7 +6,8 @@ import CargarExistenciasModal from "../components/CargarExistenciasModal";
 import CargarExistenciasMasivaModal from "../components/CargarExistenciasMasivaModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Download, Trash2, Edit, Eye, Search, Plus, Package, X } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Download, Trash2, Edit, Eye, Search, Plus, Package, X, DollarSign } from "lucide-react";
 
 interface Inventario {
   _id: string;
@@ -57,6 +58,19 @@ const VisualizarInventariosPage: React.FC = () => {
   const [sucursalSeleccionadaParaCargar, setSucursalSeleccionadaParaCargar] = useState<string>("");
   const [showCargarExistenciasMasivaModal, setShowCargarExistenciasMasivaModal] = useState(false);
   const [sucursalSeleccionadaParaCargarMasiva, setSucursalSeleccionadaParaCargarMasiva] = useState<string>("");
+  
+  // Estados para tasa de cambio (con persistencia en localStorage)
+  const [dolarBcv, setDolarBcv] = useState<number>(() => {
+    const saved = localStorage.getItem("tasaCambio_dolarBcv_verInventario");
+    return saved ? parseFloat(saved) : 0;
+  });
+  const [dolarNegro, setDolarNegro] = useState<number>(() => {
+    const saved = localStorage.getItem("tasaCambio_dolarNegro_verInventario");
+    return saved ? parseFloat(saved) : 0;
+  });
+  const [diferenciaBs, setDiferenciaBs] = useState<number>(0);
+  const [diferenciaUsd, setDiferenciaUsd] = useState<number>(0);
+  const [diferenciaPorcentaje, setDiferenciaPorcentaje] = useState<number>(0);
 
   const fetchInventarios = async (): Promise<Inventario[]> => {
     setLoading(true);
@@ -118,6 +132,44 @@ const VisualizarInventariosPage: React.FC = () => {
   useEffect(() => {
     fetchInventarios();
   }, []);
+
+  // Calcular diferencias cuando cambian los dólares
+  useEffect(() => {
+    if (dolarBcv > 0 && dolarNegro > 0) {
+      const diferencia = dolarNegro - dolarBcv;
+      setDiferenciaBs(diferencia);
+      setDiferenciaUsd(diferencia / dolarBcv);
+      setDiferenciaPorcentaje((diferencia / dolarBcv) * 100);
+    } else {
+      setDiferenciaBs(0);
+      setDiferenciaUsd(0);
+      setDiferenciaPorcentaje(0);
+    }
+  }, [dolarBcv, dolarNegro]);
+
+  // Persistir tasa de cambio en localStorage cuando cambia
+  useEffect(() => {
+    if (dolarBcv > 0) {
+      localStorage.setItem("tasaCambio_dolarBcv_verInventario", dolarBcv.toString());
+    }
+  }, [dolarBcv]);
+
+  useEffect(() => {
+    if (dolarNegro > 0) {
+      localStorage.setItem("tasaCambio_dolarNegro_verInventario", dolarNegro.toString());
+    }
+  }, [dolarNegro]);
+
+  const handleActualizarTasaCambio = () => {
+    // Guardar en localStorage
+    if (dolarBcv > 0) {
+      localStorage.setItem("tasaCambio_dolarBcv_verInventario", dolarBcv.toString());
+    }
+    if (dolarNegro > 0) {
+      localStorage.setItem("tasaCambio_dolarNegro_verInventario", dolarNegro.toString());
+    }
+    alert("Tasa de cambio actualizada correctamente");
+  };
 
   // Cargar todos los productos desde las compras (para obtener utilidad de la compra)
   const cargarTodosLosProductos = async () => {
@@ -320,6 +372,54 @@ const VisualizarInventariosPage: React.FC = () => {
         });
       });
       
+      // ✅ NUEVO: Cargar productos desde endpoint de punto de venta (para productos que aparecen allí pero no en inventarios)
+      const productosDesdePuntoVenta: any[] = [];
+      try {
+        // Obtener todas las sucursales para buscar productos en cada una
+        const sucursalesIds = farmacias.map(f => f.id).filter(id => id);
+        
+        for (const sucursalId of sucursalesIds) {
+          try {
+            // Hacer búsqueda amplia para obtener todos los productos
+            const resPuntoVenta = await fetch(
+              `${API_BASE_URL}/punto-venta/productos/buscar?q=&sucursal=${sucursalId}&limit=1000`,
+              {
+                headers: { "Authorization": `Bearer ${token}` }
+              }
+            );
+            
+            if (resPuntoVenta.ok) {
+              const dataPV = await resPuntoVenta.json();
+              const productosArrayPV = Array.isArray(dataPV) ? dataPV : (dataPV.productos || []);
+              
+              productosArrayPV.forEach((producto: any) => {
+                const codigo = (producto.codigo || "").trim().toUpperCase();
+                if (codigo) {
+                  productosDesdePuntoVenta.push({
+                    _id: producto._id || producto.id || producto.codigo,
+                    codigo: producto.codigo || "",
+                    descripcion: producto.descripcion || producto.nombre || "",
+                    marca: producto.marca || "",
+                    costo: Number(producto.costo || producto.costo_unitario || 0),
+                    costo_unitario: Number(producto.costo || producto.costo_unitario || 0),
+                    precio: Number(producto.precio || producto.precio_unitario || producto.precio_venta || 0),
+                    precio_unitario: Number(producto.precio || producto.precio_unitario || producto.precio_venta || 0),
+                    cantidad: Number(producto.existencia || producto.cantidad || producto.stock || 0),
+                    existencia: Number(producto.existencia || producto.cantidad || producto.stock || 0),
+                    desdePuntoVenta: true,
+                  });
+                }
+              });
+            }
+          } catch (err) {
+            console.warn(`⚠️ [INVENTARIOS] Error al cargar productos desde punto de venta para sucursal ${sucursalId}:`, err);
+          }
+        }
+        console.log(`✅ [INVENTARIOS] Productos cargados desde punto de venta: ${productosDesdePuntoVenta.length}`);
+      } catch (err) {
+        console.warn("⚠️ [INVENTARIOS] Error al cargar productos desde punto de venta:", err);
+      }
+
       // ✅ CRÍTICO: Agregar productos que solo están en inventarios (productos nuevos creados directamente)
       // Estos son productos que NO están en compras, solo en inventarios activos
       const productosAgregadosDesdeCompras = new Set<string>();
@@ -332,6 +432,21 @@ const VisualizarInventariosPage: React.FC = () => {
         // Solo agregar si NO fue agregado desde compras
         if (!productosAgregadosDesdeCompras.has(codigoKey)) {
         todosLosProductos.push(producto);
+        }
+      });
+
+      // ✅ CRÍTICO: Agregar productos desde punto de venta que no están en inventarios ni compras
+      const productosAgregados = new Set<string>();
+      todosLosProductos.forEach((p: any) => {
+        const codigo = (p.codigo || "").trim().toUpperCase();
+        if (codigo) productosAgregados.add(codigo);
+      });
+      
+      productosDesdePuntoVenta.forEach((producto: any) => {
+        const codigo = (producto.codigo || "").trim().toUpperCase();
+        if (codigo && !productosAgregados.has(codigo)) {
+          todosLosProductos.push(producto);
+          productosAgregados.add(codigo);
         }
       });
       
@@ -791,6 +906,82 @@ const VisualizarInventariosPage: React.FC = () => {
           )}
           </div>
         </div>
+
+        {/* Sección de Tasa de Cambio */}
+        <Card className="p-6 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <DollarSign className="h-5 w-5 text-slate-600" />
+            <h2 className="text-xl font-semibold text-slate-800">Tasa de Cambio</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Dólar BCV (Bs)
+              </label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={dolarBcv || ""}
+                onChange={(e) => setDolarBcv(parseFloat(e.target.value) || 0)}
+                placeholder="0.00"
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Dólar Negro (Bs)
+              </label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={dolarNegro || ""}
+                onChange={(e) => setDolarNegro(parseFloat(e.target.value) || 0)}
+                placeholder="0.00"
+                className="w-full"
+              />
+            </div>
+            {dolarBcv > 0 && dolarNegro > 0 && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Diferencia (Bs)
+                  </label>
+                  <div className="p-2 bg-slate-100 rounded-md text-lg font-semibold text-slate-800">
+                    {diferenciaBs.toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Diferencia (%)
+                  </label>
+                  <div className="p-2 bg-slate-100 rounded-md text-lg font-semibold text-slate-800">
+                    {diferenciaPorcentaje.toFixed(2)}%
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          {dolarBcv > 0 && dolarNegro > 0 && (
+            <div className="mt-4 flex items-center justify-between">
+              <div className="p-3 bg-blue-50 rounded-md flex-1 mr-4">
+                <p className="text-sm text-slate-700">
+                  <strong>Diferencia en USD:</strong> ${diferenciaUsd.toFixed(4)}
+                </p>
+                <p className="text-sm text-slate-600 mt-1">
+                  Cuando se active "Aplicar Tasa de Cambio" en Carga Masiva, se sumará este porcentaje ({diferenciaPorcentaje.toFixed(2)}%) al costo de los productos.
+                </p>
+              </div>
+              <Button
+                onClick={handleActualizarTasaCambio}
+                className="flex items-center gap-2"
+              >
+                Actualizar
+              </Button>
+            </div>
+          )}
+        </Card>
         
         {/* Buscador/Filtro de Inventarios - Solo mostrar si no está en vista tabla */}
         {!vistaTabla && (
