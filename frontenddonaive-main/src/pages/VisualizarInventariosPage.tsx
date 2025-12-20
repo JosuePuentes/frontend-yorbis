@@ -261,9 +261,12 @@ const VisualizarInventariosPage: React.FC = () => {
         console.log("🔄 [INVENTARIOS] No se obtuvieron productos desde punto de venta, cargando desde inventarios...");
         
         try {
-          // Recargar inventarios primero
-          const inventariosActualizados = await fetchInventarios();
-          const inventariosParaUsar = inventariosActualizados.length > 0 ? inventariosActualizados : inventarios;
+          // Recargar inventarios primero si no hay inventarios cargados
+          let inventariosParaUsar = inventarios;
+          if (inventarios.length === 0) {
+            console.log("🔄 [INVENTARIOS] No hay inventarios en estado, recargando...");
+            inventariosParaUsar = await fetchInventarios();
+          }
           
           // Cargar items de todos los inventarios activos
           const promesasInventarios = inventariosParaUsar.map(async (inventario) => {
@@ -352,18 +355,10 @@ const VisualizarInventariosPage: React.FC = () => {
     }
   };
 
-  // Cargar productos al montar el componente (vista tabla es predeterminada)
+  // Cargar productos al montar el componente o cuando se cambia a vista tabla
   useEffect(() => {
     if (vistaTabla && todosLosProductos.length === 0 && !cargandoProductos) {
-      console.log("🔄 [INVENTARIOS] Cargando productos iniciales...");
-      cargarTodosLosProductos();
-    }
-  }, [vistaTabla, todosLosProductos.length, cargandoProductos]);
-  
-  // Cargar productos cuando se cambia a vista tabla
-  useEffect(() => {
-    if (vistaTabla && todosLosProductos.length === 0 && !cargandoProductos) {
-      console.log("🔄 [INVENTARIOS] Cambiando a vista tabla, cargando productos...");
+      console.log("🔄 [INVENTARIOS] Cargando productos (vista tabla activa)...");
       cargarTodosLosProductos();
     }
   }, [vistaTabla]);
