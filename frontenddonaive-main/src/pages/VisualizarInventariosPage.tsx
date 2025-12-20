@@ -196,14 +196,30 @@ const VisualizarInventariosPage: React.FC = () => {
       // Extraer productos de todas las compras
       const todosLosProductos: any[] = [];
       
-      // ✅ Primero agregar productos desde inventarios (tienen datos más actualizados)
-      const productosInventarioMap = new Map();
+      // ✅ CRÍTICO: Crear mapa de productos desde inventarios (tienen datos más actualizados)
+      // Usar código como clave principal, pero también mapear por _id para evitar duplicados
+      const productosInventarioMap = new Map<string, any>();
+      const productosPorIdMap = new Map<string, any>();
+      
       productosDesdeInventarios.forEach((p: any) => {
-        const key = p.codigo || p._id;
-        if (key) {
-          productosInventarioMap.set(key, p);
+        const codigo = p.codigo || "";
+        const id = p._id || "";
+        
+        // Mapear por código (normalizar a mayúsculas para evitar duplicados por mayúsculas/minúsculas)
+        if (codigo) {
+          const codigoKey = codigo.trim().toUpperCase();
+          if (!productosInventarioMap.has(codigoKey)) {
+            productosInventarioMap.set(codigoKey, p);
+          }
+        }
+        
+        // También mapear por ID para referencia
+        if (id) {
+          productosPorIdMap.set(String(id), p);
         }
       });
+      
+      console.log(`✅ [INVENTARIOS] Productos únicos desde inventarios: ${productosInventarioMap.size}`);
 
       comprasArray.forEach((compra: any) => {
         // Normalizar items/productos - el backend puede enviar "productos" o "items"
@@ -252,7 +268,9 @@ const VisualizarInventariosPage: React.FC = () => {
           }
 
           const codigoProducto = item.codigo || item.codigo_producto || "";
-          const productoDesdeInventario = codigoProducto ? productosInventarioMap.get(codigoProducto) : null;
+          // ✅ CRÍTICO: Normalizar código a mayúsculas para coincidencia
+          const codigoKey = codigoProducto.trim().toUpperCase();
+          const productoDesdeInventario = codigoKey ? productosInventarioMap.get(codigoKey) : null;
           
           // ✅ Si el producto existe en inventario, usar esos datos (más actualizados)
           // Si no, usar los datos de la compra
@@ -263,8 +281,8 @@ const VisualizarInventariosPage: React.FC = () => {
               compra_id: compra._id,
               fecha_carga: fechaCompra,
             });
-            // Eliminar del mapa para evitar duplicados
-            productosInventarioMap.delete(codigoProducto);
+            // ✅ NO eliminar del mapa aquí - puede haber múltiples compras con el mismo producto
+            // Solo marcar que ya se agregó desde compra
           } else {
             // Producto solo en compras (histórico)
             const producto = {
@@ -291,23 +309,56 @@ const VisualizarInventariosPage: React.FC = () => {
         });
       });
       
-      // ✅ Agregar productos que solo están en inventarios (productos nuevos creados directamente)
-      productosInventarioMap.forEach((producto: any) => {
-        todosLosProductos.push(producto);
+      // ✅ CRÍTICO: Agregar productos que solo están en inventarios (productos nuevos creados directamente)
+      // Estos son productos que NO están en compras, solo en inventarios activos
+      const productosAgregadosDesdeCompras = new Set<string>();
+      todosLosProductos.forEach((p: any) => {
+        const codigo = (p.codigo || "").trim().toUpperCase();
+        if (codigo) productosAgregadosDesdeCompras.add(codigo);
       });
-
-      console.log(`✅ [INVENTARIOS] Productos cargados desde compras: ${todosLosProductos.length}`);
-      if (todosLosProductos.length > 0) {
+      
+      productosInventarioMap.forEach((producto: any, codigoKey: string) => {
+        // Solo agregar si NO fue agregado desde compras
+        if (!productosAgregadosDesdeCompras.has(codigoKey)) {
+          todosLosProductos.push(producto);
+        }
+      });
+      
+      // ✅ CRÍTICO: Eliminar duplicados finales por código (por si acaso)
+      const productosUnicos = new Map<string, any>();
+      todosLosProductos.forEach((producto: any) => {
+        const codigo = (producto.codigo || "").trim().toUpperCase();
+        const id = String(producto._id || "");
+        
+        // Prioridad: si ya existe por código, usar el que tiene más datos (inventario > compra)
+        if (codigo) {
+          const existente = productosUnicos.get(codigo);
+          if (!existente || (producto.desdeInventario && !existente.desdeInventario)) {
+            productosUnicos.set(codigo, producto);
+          }
+        } else if (id) {
+          // Si no tiene código, usar ID
+          if (!productosUnicos.has(id)) {
+            productosUnicos.set(id, producto);
+          }
+        }
+      });
+      
+      const productosFinales = Array.from(productosUnicos.values());
+      console.log(`✅ [INVENTARIOS] Productos finales únicos: ${productosFinales.length} (después de eliminar duplicados)`);
+      
+      if (productosFinales.length > 0) {
         console.log(`📦 [INVENTARIOS] Primer producto:`, {
-          codigo: todosLosProductos[0].codigo,
-          descripcion: todosLosProductos[0].descripcion,
-          costo: todosLosProductos[0].costo,
-          utilidad: todosLosProductos[0].utilidad,
-          precio: todosLosProductos[0].precio
+          codigo: productosFinales[0].codigo,
+          descripcion: productosFinales[0].descripcion,
+          costo: productosFinales[0].costo,
+          utilidad: productosFinales[0].utilidad,
+          precio: productosFinales[0].precio,
+          existencia: productosFinales[0].existencia
         });
       }
-
-      setTodosLosProductos(todosLosProductos);
+      
+      setTodosLosProductos(productosFinales);
     } catch (err: any) {
       console.error("Error al cargar productos desde compras:", err);
       setError(err.message || "Error al cargar productos");
@@ -1081,7 +1132,7 @@ const VisualizarInventariosPage: React.FC = () => {
           />
         )}
 
-        {/* Modal de editar producto */}
+        {/* Modal de editar producto - Abre directamente el item seleccionado */}
         {productoAEditar && (
           <ModificarItemInventarioModal
             open={!!productoAEditar}
@@ -1092,6 +1143,7 @@ const VisualizarInventariosPage: React.FC = () => {
             }}
             inventarioId={productoAEditar.inventario_id || ""}
             sucursalId={productoAEditar.sucursal_id || ""}
+            itemId={productoAEditar.codigo || productoAEditar._id || undefined} // ✅ CRÍTICO: Pasar itemId para abrir directamente
             onSuccess={() => {
               setProductoAEditar(null);
               cargarTodosLosProductos();
