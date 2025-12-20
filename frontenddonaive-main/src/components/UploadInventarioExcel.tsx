@@ -152,8 +152,13 @@ const UploadInventarioExcel: React.FC<UploadInventarioExcelProps> = ({
 
           // Permitir valores NaN - convertirlos a 0 o string vacío según corresponda
           const costoFinal = isNaN(costo) ? 0 : costo;
-          const utilidadFinal = isNaN(utilidad) ? 0 : utilidad;
+          let utilidadFinal = isNaN(utilidad) ? 0 : utilidad;
           const existenciaFinal = isNaN(existencia) ? 0 : existencia;
+          
+          // ✅ Si la utilidad es 0 o vacía, calcular automáticamente el 40% del costo
+          if (utilidadFinal === 0 && costoFinal > 0) {
+            utilidadFinal = costoFinal * 0.40; // 40% de utilidad por defecto
+          }
           
           // Calcular precio: COSTO + UTILIDAD = PRECIO
           // Si viene precio del Excel, usarlo; si no, calcularlo

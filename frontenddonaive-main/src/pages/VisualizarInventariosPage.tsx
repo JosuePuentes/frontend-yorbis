@@ -910,7 +910,10 @@ const VisualizarInventariosPage: React.FC = () => {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Descripción</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Marca</th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Costo</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Utilidad</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                        Utilidad (%)
+                        <div className="text-xs font-normal text-green-600 mt-1">Meta: 40%</div>
+                      </th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Precio</th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Existencia</th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Total $</th>
@@ -931,6 +934,9 @@ const VisualizarInventariosPage: React.FC = () => {
                         porcentajeGanancia = (utilidad / costo) * 100;
                       } else if (porcentajeGanancia === 0 && precio > costo && costo > 0) {
                         porcentajeGanancia = ((precio - costo) / costo) * 100;
+                      } else if (porcentajeGanancia === 0 && costo > 0) {
+                        // ✅ Si no hay utilidad definida, calcular automáticamente el 40%
+                        porcentajeGanancia = 40.0;
                       }
                       
                       const total = costo * cantidad; // Total = Costo × Cantidad
@@ -951,9 +957,22 @@ const VisualizarInventariosPage: React.FC = () => {
                           <td className="px-4 py-3 text-sm text-right text-slate-700">
                             ${costo.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
-                          <td className="px-4 py-3 text-sm text-right text-green-600 font-medium">
-                            ${utilidad.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            <div className="text-xs text-slate-500">({porcentajeGanancia.toFixed(2)}%)</div>
+                          <td className="px-4 py-3 text-sm text-right">
+                            <div className="flex flex-col items-end">
+                              <span className="text-green-600 font-semibold">
+                                ${utilidad.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                              <span className={`text-xs font-bold ${
+                                Math.abs(porcentajeGanancia - 40.0) < 0.01 
+                                  ? 'text-green-700 bg-green-100 px-2 py-0.5 rounded' 
+                                  : porcentajeGanancia > 40.0 
+                                    ? 'text-blue-600' 
+                                    : 'text-orange-600'
+                              }`}>
+                                {porcentajeGanancia.toFixed(2)}%
+                                {Math.abs(porcentajeGanancia - 40.0) < 0.01 && ' ✓'}
+                              </span>
+                            </div>
                           </td>
                           <td className="px-4 py-3 text-sm text-right font-semibold text-slate-900">
                             ${precio.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1377,40 +1396,59 @@ const VisualizarInventariosPage: React.FC = () => {
 
                     // Primero actualizar productos existentes
                     let productosActualizadosLista = prevProductos.map((producto: any) => {
-                      const productoCodigo = (producto.codigo || "").trim();
+                      const productoCodigo = String(producto.codigo || "").trim();
                       const productoCodigoLower = productoCodigo.toLowerCase();
                       const productoId = producto._id || producto.id || productoCodigo;
                       
                       // ✅ Buscar por código primero (más confiable) - probar múltiples variantes
-                      let productoActualizado = productoCodigoLower ? productosActualizadosMap.get(productoCodigoLower) : null;
+                      let productoActualizado = null;
+                      let encontradoPor = "";
+                      
+                      // Intentar 1: Por código normalizado (lowercase)
+                      if (productoCodigoLower) {
+                        productoActualizado = productosActualizadosMap.get(productoCodigoLower);
+                        if (productoActualizado) encontradoPor = "codigo_lowercase";
+                      }
+                      
+                      // Intentar 2: Por código original (con espacios, mayúsculas, etc.)
                       if (!productoActualizado && productoCodigo) {
                         productoActualizado = productosActualizadosMap.get(productoCodigo);
+                        if (productoActualizado) encontradoPor = "codigo_original";
                       }
                       
-                      // Si no se encontró por código, buscar por ID
+                      // Intentar 3: Por ID
                       if (!productoActualizado && productoId) {
                         productoActualizado = productosActualizadosMap.get(String(productoId));
+                        if (productoActualizado) encontradoPor = "id";
                       }
                       
-                      // Si aún no se encontró, buscar en el array directamente por código
+                      // Intentar 4: Buscar en el array directamente por código (comparación flexible)
                       if (!productoActualizado && productoCodigo) {
                         productoActualizado = productosActualizados.find((p: any) => {
-                          const codigoP = (p.codigo || "").trim();
-                          return codigoP.toLowerCase() === productoCodigoLower || codigoP === productoCodigo;
+                          const codigoP = String(p.codigo || "").trim();
+                          const codigoPLower = codigoP.toLowerCase();
+                          // Comparación exacta o normalizada
+                          return codigoPLower === productoCodigoLower || 
+                                 codigoP === productoCodigo ||
+                                 codigoP.replace(/\s+/g, '') === productoCodigo.replace(/\s+/g, '');
                         });
+                        if (productoActualizado) encontradoPor = "array_directo";
                       }
                       
                       if (productoActualizado && !productoActualizado.esNuevo) {
-                        const cantidadAnterior = producto.cantidad || producto.existencia || 0;
+                        const cantidadAnterior = Number(producto.cantidad || producto.existencia || 0);
                         const cantidadNueva = productoActualizado.cantidad_nueva !== undefined 
-                          ? productoActualizado.cantidad_nueva 
-                          : (productoActualizado.cantidad || productoActualizado.existencia || cantidadAnterior);
+                          ? Number(productoActualizado.cantidad_nueva)
+                          : Number(productoActualizado.cantidad || productoActualizado.existencia || cantidadAnterior);
                         
                         console.log(`✅ [INVENTARIOS] Actualizando producto:`, {
-                          codigo: producto.codigo,
+                          codigo_lista: productoCodigo,
+                          codigo_modal: productoActualizado.codigo,
                           cantidad_anterior: cantidadAnterior,
                           cantidad_nueva: cantidadNueva,
-                          encontrado_por: productoActualizado.codigo ? 'codigo' : 'id'
+                          encontrado_por: encontradoPor,
+                          producto_id_backend: productoActualizado.producto_id,
+                          cantidad_nueva_valor: productoActualizado.cantidad_nueva
                         });
                         
                         // ✅ Actualizar con los nuevos datos - PRIORIZAR cantidad_nueva que viene del backend
@@ -1424,6 +1462,19 @@ const VisualizarInventariosPage: React.FC = () => {
                           precio: productoActualizado.precio || productoActualizado.precio_venta || producto.precio,
                           marca: productoActualizado.marca || producto.marca, // ✅ Actualizar marca también
                         };
+                      } else if (productoCodigo) {
+                        // Log para productos que NO se encontraron (para debugging)
+                        const codigosEnMapa = Array.from(productosActualizadosMap.keys());
+                        console.log(`⚠️ [INVENTARIOS] Producto NO encontrado para actualizar:`, {
+                          codigo_buscado: productoCodigo,
+                          codigo_lowercase: productoCodigoLower,
+                          codigos_disponibles_en_mapa: codigosEnMapa.slice(0, 5), // Mostrar primeros 5
+                          productos_recibidos: productosActualizados.map((p: any) => ({
+                            codigo: p.codigo,
+                            producto_id: p.producto_id,
+                            cantidad_nueva: p.cantidad_nueva
+                          }))
+                        });
                       }
                       return producto;
                     });
