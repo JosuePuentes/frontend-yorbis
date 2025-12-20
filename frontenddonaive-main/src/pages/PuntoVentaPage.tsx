@@ -2042,6 +2042,17 @@ const PuntoVentaPage: React.FC = () => {
       setMetodosPago([]);
       setShowPagoModal(false);
       
+      // ✅ CRÍTICO: Refrescar productos para actualizar stock después de la venta
+      console.log("🔄 [PUNTO_VENTA] Refrescando productos para actualizar stock...");
+      if (busquedaItem.trim().length > 0) {
+        // Si hay una búsqueda activa, refrescar los productos encontrados
+        const busquedaActual = busquedaItem;
+        setBusquedaItem(""); // Limpiar temporalmente
+        setTimeout(() => {
+          setBusquedaItem(busquedaActual); // Restaurar búsqueda para refrescar
+        }, 100);
+      }
+      
       // ✅ NUEVO: Actualizar facturas procesadas automáticamente
       // Si la sección de facturas procesadas está abierta, refrescar la lista
       if (mostrarFacturasProcesadas) {

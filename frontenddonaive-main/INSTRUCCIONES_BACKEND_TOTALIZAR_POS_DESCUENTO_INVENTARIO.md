@@ -372,3 +372,4 @@ El descuento debe ser:
 - ✅ Validado (verificar stock antes)
 - ✅ Correcto (de la sucursal correcta)
 
+

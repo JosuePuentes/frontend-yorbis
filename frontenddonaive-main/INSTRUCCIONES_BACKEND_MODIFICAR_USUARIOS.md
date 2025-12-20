@@ -823,3 +823,4 @@ Content-Type: application/json
 
 Todos los endpoints bajo `/modificar-usuarios` deben estar implementados para que el módulo de gestión de usuarios funcione correctamente. El endpoint más crítico es `GET /modificar-usuarios` que actualmente retorna 404.
 
+

@@ -527,3 +527,4 @@ GET /libro-ventas?cliente=Juan&producto=SPRAY&fecha_inicio=2025-01-01&fecha_fin=
 
 El endpoint debe devolver todas las ventas procesadas con sus items expandidos en formato tipo Excel, permitiendo búsqueda por cliente y producto, y mostrando totales generales. El acceso debe estar protegido por el permiso `ver_libro_ventas`.
 
+

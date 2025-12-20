@@ -611,9 +611,21 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
               const productoIdBackend = productoActualizado.producto_id || productoActualizado._id || productoActualizado.id || productoActualizado.codigo;
               
               // ✅ Comparar por múltiples campos para asegurar que encontramos el producto correcto
-              if (productoId === productoIdBackend || 
-                  p.codigo === productoActualizado.codigo ||
-                  (productoActualizado.codigo && p.codigo === productoActualizado.codigo)) {
+              const codigoP = String(p.codigo || "").trim();
+              const codigoBackend = String(productoActualizado.codigo || "").trim();
+              const codigoPMatch = codigoP.toLowerCase() === codigoBackend.toLowerCase() || codigoP === codigoBackend;
+              const idMatch = productoId === productoIdBackend;
+              
+              if (idMatch || codigoPMatch || 
+                  (codigoBackend && codigoP === codigoBackend)) {
+                console.log(`🔄 [MODAL] Producto encontrado para actualizar:`, {
+                  codigo_modal: codigoP,
+                  codigo_backend: codigoBackend,
+                  producto_id: productoId,
+                  cantidad_anterior: p.cantidad || p.existencia,
+                  cantidad_nueva: productoActualizado.cantidad_nueva
+                });
+                
                 const productoActualizadoLocal = {
                   ...p,
                   cantidad: productoActualizado.cantidad_nueva,
@@ -625,17 +637,18 @@ const CargarExistenciasMasivaModal: React.FC<CargarExistenciasMasivaModalProps> 
                 };
                 
                 // Agregar a la lista de productos actualizados para el callback
+                // ✅ CRÍTICO: Asegurar que el código esté presente y normalizado
                 productosActualizados.push({
                   ...productoActualizadoLocal,
                   _id: productoId,
                   id: productoId,
-                  codigo: p.codigo || productoActualizado.codigo || "", // ✅ Asegurar que el código esté presente
+                  codigo: codigoP || codigoBackend || "", // ✅ Usar código del modal (ya normalizado)
                   nombre: p.nombre || p.descripcion || productoActualizado.nombre || productoActualizado.descripcion || "",
                   descripcion: p.descripcion || p.nombre || productoActualizado.descripcion || productoActualizado.nombre || "",
                   marca: p.marca || productoActualizado.marca || "",
                   // Incluir campos adicionales que la página principal pueda necesitar
                   producto_id: productoActualizado.producto_id || productoId,
-                  cantidad_nueva: productoActualizado.cantidad_nueva,
+                  cantidad_nueva: productoActualizado.cantidad_nueva, // ✅ CRÍTICO: Incluir cantidad_nueva
                 });
                 
                 return productoActualizadoLocal;

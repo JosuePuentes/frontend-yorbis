@@ -766,21 +766,26 @@ const VisualizarInventariosPage: React.FC = () => {
                   <tbody className="bg-white divide-y divide-slate-200">
                     {productosFiltrados.map((producto: any, index: number) => {
                       const costo = Number(producto.costo_unitario || producto.costo || 0);
-                      const utilidad = Number(producto.utilidad || 0); // Utilidad viene de la compra (en dinero)
-                      const utilidadPorcentaje = Number(producto.utilidad_porcentaje || producto.porcentaje_ganancia || 0); // Porcentaje de utilidad
-                      const precio = Number(producto.precio_unitario || producto.precio || (costo + utilidad)); // Precio = Costo + Utilidad
+                      const utilidadPorcentaje = Number(producto.utilidad_porcentaje || producto.porcentaje_ganancia || producto.porcentaje_utilidad || 0);
                       const cantidad = Number(producto.cantidad || producto.existencia || 0);
                       
-                      // Calcular porcentaje de ganancia si no viene
+                      // ✅ Calcular porcentaje de ganancia - SIEMPRE usar 40% por defecto si no viene
                       let porcentajeGanancia = utilidadPorcentaje;
-                      if (porcentajeGanancia === 0 && utilidad > 0 && costo > 0) {
-                        porcentajeGanancia = (utilidad / costo) * 100;
-                      } else if (porcentajeGanancia === 0 && precio > costo && costo > 0) {
-                        porcentajeGanancia = ((precio - costo) / costo) * 100;
-                      } else if (porcentajeGanancia === 0 && costo > 0) {
-                        // ✅ Si no hay utilidad definida, calcular automáticamente el 40%
+                      if (porcentajeGanancia === 0 || porcentajeGanancia === null || porcentajeGanancia === undefined) {
+                        // Si no hay porcentaje definido, usar 40% por defecto
                         porcentajeGanancia = 40.0;
                       }
+                      
+                      // ✅ Calcular precio de venta: costo + (costo * porcentajeGanancia / 100)
+                      // Si no hay precio_unitario, calcularlo desde costo + utilidad 40%
+                      let precio = Number(producto.precio_unitario || producto.precio || 0);
+                      if (precio === 0 && costo > 0) {
+                        // Calcular precio desde costo + porcentaje de utilidad
+                        precio = costo * (1 + porcentajeGanancia / 100);
+                      }
+                      
+                      // Calcular utilidad en monto
+                      const utilidad = precio - costo;
                       
                       const total = costo * cantidad; // Total = Costo × Cantidad
                       
@@ -950,6 +955,17 @@ const VisualizarInventariosPage: React.FC = () => {
                       // Si no hay porcentaje definido, usar 40% por defecto
                       porcentajeGanancia = 40.0;
                     }
+                    
+                    // ✅ Calcular precio de venta: costo + (costo * 40%)
+                    // Si no hay precio_unitario, calcularlo desde costo + utilidad 40%
+                    let precio = Number(item.precio_unitario || item.precio || 0);
+                    if (precio === 0 && costo > 0) {
+                      // Calcular precio desde costo + 40% de utilidad
+                      precio = costo * (1 + porcentajeGanancia / 100);
+                    }
+                    
+                    // Calcular utilidad en monto
+                    const utilidad = precio - costo;
                     
                     return (
                       <tr key={item._id || item.id || index} className="hover:bg-slate-50 transition-colors duration-150 ease-in-out">
