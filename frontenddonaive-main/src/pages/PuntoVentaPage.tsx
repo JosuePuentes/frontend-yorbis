@@ -1956,6 +1956,7 @@ const PuntoVentaPage: React.FC = () => {
         porcentaje_descuento: clienteSeleccionado?.porcentaje_descuento || 0,
         descuento_por_divisa: descuentoPorDivisaActivo ? (parseFloat(porcentajeDescuentoDivisa) || 0) : 0,
         notas: "",
+        estado: "procesada", // ✅ CRÍTICO: Estado para que aparezca en resumen-venta-diaria
       };
       
       // Agregar vuelto si existe

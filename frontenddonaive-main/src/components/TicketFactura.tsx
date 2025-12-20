@@ -264,14 +264,14 @@ export const TicketFactura: React.FC<TicketFacturaProps> = ({
           ${item.codigo ? `<div class="item-codigo">Código: ${item.codigo}</div>` : ""}
           <div class="item-detalle">
             <span class="item-cantidad">${item.cantidad} x</span>
-            <span class="item-precio">${(item.precio_unitario_usd * tasaDia).toFixed(2)} bs</span>
+            <span class="item-precio">$${item.precio_unitario_usd.toFixed(2)}</span>
           </div>
           ${item.descuento_aplicado && item.descuento_aplicado > 0 ? `
             <div class="item-descuento">Descuento: ${item.descuento_aplicado}%</div>
           ` : ""}
           <div class="item-detalle" style="margin-top: 3px;">
             <span>Subtotal:</span>
-            <span class="item-precio">${(item.subtotal_usd * tasaDia).toFixed(2)} bs</span>
+            <span class="item-precio">$${item.subtotal_usd.toFixed(2)}</span>
           </div>
         </div>
       `).join("")}
@@ -283,20 +283,16 @@ export const TicketFactura: React.FC<TicketFacturaProps> = ({
       ${porcentajeDescuento && porcentajeDescuento > 0 ? `
         <div class="total-line subtotal">
           <span>Subtotal:</span>
-          <span>${((totalUsd + totalDescuento) * tasaDia).toFixed(2)} bs</span>
+          <span>$${(totalUsd + totalDescuento).toFixed(2)}</span>
         </div>
         <div class="total-line descuento">
           <span>Descuento (${porcentajeDescuento}%):</span>
-          <span>-${(totalDescuento * tasaDia).toFixed(2)} bs</span>
+          <span>-$${totalDescuento.toFixed(2)}</span>
         </div>
       ` : ""}
       <div class="total-line final">
         <span>TOTAL:</span>
-        <span>${totalBs.toFixed(2)} bs</span>
-      </div>
-      <div class="total-line" style="font-size: 10px; color: #666;">
-        <span>Tasa del día:</span>
-        <span>${tasaDia.toFixed(2)} Bs/USD</span>
+        <span>$${totalUsd.toFixed(2)}</span>
       </div>
     </div>
 
@@ -307,14 +303,14 @@ export const TicketFactura: React.FC<TicketFacturaProps> = ({
       ${metodosPago.map((metodo) => `
         <div class="metodo-pago">
           <span>${metodo.tipo.toUpperCase()} (${metodo.divisa}):</span>
-          <span>${metodo.divisa === "USD" ? (metodo.monto * tasaDia).toFixed(2) : metodo.monto.toFixed(2)} bs</span>
+          <span>${metodo.divisa === "USD" ? `$${metodo.monto.toFixed(2)}` : `${metodo.monto.toFixed(2)} Bs`}</span>
         </div>
       `).join("")}
     </div>
 
     ${vuelto ? `
     <div class="vuelto">
-      VUELTO: ${vuelto.divisa === "USD" ? (vuelto.monto * tasaDia).toFixed(2) : vuelto.monto.toFixed(2)} bs
+      VUELTO: ${vuelto.divisa === "USD" ? `$${vuelto.monto.toFixed(2)}` : `${vuelto.monto.toFixed(2)} Bs`}
     </div>
     ` : ""}
 
