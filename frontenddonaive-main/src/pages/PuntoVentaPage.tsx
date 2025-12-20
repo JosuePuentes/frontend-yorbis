@@ -3240,7 +3240,7 @@ const PuntoVentaPage: React.FC = () => {
                 value={bancoSeleccionadoPago}
                 onChange={(e) => {
                   setBancoSeleccionadoPago(e.target.value);
-                  // Actualizar tipo y divisa según el banco seleccionado
+                  // Actualizar tipo y divisa según el banco seleccionado (pero permitir cambio manual)
                   const banco = bancos.find(b => (b._id || b.id) === e.target.value);
                   if (banco) {
                     // Convertir "BS" del backend a "Bs" para el método de pago (compatibilidad)
@@ -3274,6 +3274,26 @@ const PuntoVentaPage: React.FC = () => {
                 }
                 return null;
               })()}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Tipo de Moneda (Divisa) *</label>
+              <select
+                value={metodoPagoActual.divisa}
+                onChange={(e) => {
+                  setMetodoPagoActual({ 
+                    ...metodoPagoActual, 
+                    divisa: e.target.value as "Bs" | "USD" 
+                  });
+                }}
+                className="w-full border rounded px-3 py-2"
+              >
+                <option value="USD">USD ($)</option>
+                <option value="Bs">Bolívares (Bs)</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Seleccione la moneda en la que el cliente realizará el pago
+              </p>
             </div>
 
             <div>
