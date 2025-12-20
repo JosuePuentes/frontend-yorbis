@@ -435,6 +435,44 @@ const VisualizarInventariosPage: React.FC = () => {
     }
   }, []);
 
+  // ✅ CRÍTICO: Sincronizar itemsInventarios con todosLosProductos para que ambas vistas muestren lo mismo
+  useEffect(() => {
+    // Cuando se cargan los productos, también actualizar itemsInventarios
+    if (todosLosProductos.length > 0) {
+      console.log("🔄 [INVENTARIOS] Sincronizando itemsInventarios con todosLosProductos...");
+      // Usar los mismos productos pero en formato compatible con la vista de inventarios
+      const itemsSincronizados = todosLosProductos.map((producto: any) => ({
+        ...producto,
+        // Asegurar que todos los campos estén presentes
+        _id: producto._id || producto.id,
+        id: producto.id || producto._id,
+        codigo: producto.codigo || "",
+        descripcion: producto.descripcion || producto.nombre || "",
+        nombre: producto.nombre || producto.descripcion || "",
+        marca: producto.marca || producto.marca_producto || "",
+        marca_producto: producto.marca_producto || producto.marca || "",
+        costo: producto.costo || producto.costo_unitario || 0,
+        costo_unitario: producto.costo_unitario || producto.costo || 0,
+        precio: producto.precio || producto.precio_unitario || 0,
+        precio_unitario: producto.precio_unitario || producto.precio || 0,
+        cantidad: producto.cantidad || producto.existencia || 0,
+        existencia: producto.existencia || producto.cantidad || 0,
+        stock: producto.stock || producto.existencia || producto.cantidad || 0,
+        utilidad: producto.utilidad || 0,
+        utilidad_porcentaje: producto.utilidad_porcentaje || producto.porcentaje_utilidad || 0,
+        porcentaje_ganancia: producto.porcentaje_ganancia || producto.utilidad_porcentaje || 0,
+        porcentaje_utilidad: producto.porcentaje_utilidad || producto.utilidad_porcentaje || 0,
+        sucursal_id: producto.sucursal_id || "",
+        sucursal_nombre: producto.sucursal_nombre || producto.sucursal_id || "",
+        fecha_carga: producto.fecha_carga || "",
+        inventario_id: producto.inventario_id || ""
+      }));
+      
+      setItemsInventarios(itemsSincronizados);
+      console.log(`✅ [INVENTARIOS] Items sincronizados: ${itemsSincronizados.length} productos (mismos que Tabla de Productos)`);
+    }
+  }, [todosLosProductos]);
+
   // Este useEffect ya no es necesario porque ahora mostramos items individuales
   // Se mantiene comentado por si se necesita en el futuro
 
