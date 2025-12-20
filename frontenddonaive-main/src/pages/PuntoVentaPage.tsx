@@ -456,15 +456,28 @@ const PuntoVentaPage: React.FC = () => {
                         
                         // Mapear por ID (convertir a string para asegurar coincidencia)
                         if (itemId) {
-                          existenciaRealMap.set(String(itemId), existenciaReal);
+                          const idStr = String(itemId);
+                          existenciaRealMap.set(idStr, existenciaReal);
+                          console.log(`🗺️ [PUNTO_VENTA] Mapeando por ID: "${idStr}" = ${existenciaReal}`);
                         }
-                        // Mapear por código
+                        // Mapear por código (normalizar a mayúsculas y sin espacios)
                         if (codigo) {
-                          existenciaRealMap.set(String(codigo), existenciaReal);
+                          const codigoStr = String(codigo).trim().toUpperCase();
+                          existenciaRealMap.set(codigoStr, existenciaReal);
+                          console.log(`🗺️ [PUNTO_VENTA] Mapeando por código: "${codigoStr}" = ${existenciaReal}`);
                         }
                       });
                       
                       console.log(`🔍 [PUNTO_VENTA] Mapa de existencia creado. Ejemplo de claves:`, Array.from(existenciaRealMap.keys()).slice(0, 5));
+                      
+                      // ✅ DEBUG: Mostrar algunos items del inventario para verificar
+                      console.log(`📦 [PUNTO_VENTA] Items del inventario (primeros 3):`, itemsArray.slice(0, 3).map((item: any) => ({
+                        id: item._id || item.id,
+                        codigo: item.codigo || item.codigo_producto,
+                        cantidad: item.cantidad,
+                        existencia: item.existencia,
+                        stock: item.stock
+                      })));
 
                       console.log(`✅ [PUNTO_VENTA] Mapa de existencia real creado con ${existenciaRealMap.size} productos`);
 
@@ -472,12 +485,27 @@ const PuntoVentaPage: React.FC = () => {
                       const productosNormalizados = productosArray.map((producto: any) => {
                         // Buscar existencia real en el mapa (por ID o código)
                         const productoId = String(producto.id || producto._id || "");
-                        const productoCodigo = String(producto.codigo || "");
-                        const existenciaReal = existenciaRealMap.get(productoId) || 
-                                             existenciaRealMap.get(productoCodigo) ||
+                        // ✅ CRÍTICO: Normalizar código a mayúsculas y sin espacios para coincidencia
+                        const productoCodigo = String(producto.codigo || "").trim().toUpperCase();
+                        
+                        // Intentar encontrar en el mapa
+                        const existenciaPorId = existenciaRealMap.get(productoId);
+                        const existenciaPorCodigo = existenciaRealMap.get(productoCodigo);
+                        const existenciaReal = existenciaPorId ?? existenciaPorCodigo ?? 
                                              (producto.existencia ?? producto.cantidad ?? producto.stock ?? 0);
                         
-                        console.log(`📊 [PUNTO_VENTA] Producto ${productoCodigo} (ID: ${productoId}): existencia del backend=${producto.existencia}, existencia real del inventario=${existenciaReal}`);
+                        // ✅ DEBUG DETALLADO
+                        console.log(`📊 [PUNTO_VENTA] Producto "${productoCodigo}" (ID: "${productoId}"):`, {
+                          existenciaBackend: producto.existencia,
+                          cantidadBackend: producto.cantidad,
+                          stockBackend: producto.stock,
+                          existenciaPorId: existenciaPorId,
+                          existenciaPorCodigo: existenciaPorCodigo,
+                          existenciaRealFinal: existenciaReal,
+                          existeEnMapaPorId: existenciaRealMap.has(productoId),
+                          existeEnMapaPorCodigo: existenciaRealMap.has(productoCodigo),
+                          todasLasClavesDelMapa: Array.from(existenciaRealMap.keys())
+                        });
                         
                         return {
                           ...producto,
