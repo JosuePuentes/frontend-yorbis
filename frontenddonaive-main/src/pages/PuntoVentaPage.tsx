@@ -572,6 +572,9 @@ const PuntoVentaPage: React.FC = () => {
           console.log(`🏷️ [PUNTO_VENTA] Producto ${item.codigo || 'sin_codigo'} tiene marca:`, marcaNormalizada);
         }
         
+        // ✅ Prioridad: existencia > cantidad > stock (según instrucciones del backend)
+        const existencia = item.existencia ?? item.cantidad ?? item.stock ?? 0;
+        
         return {
           id: item._id || item.id || `${item.codigo}_${Math.random()}`,
           nombre: item.descripcion || item.nombre || item.descripcion_producto || "",
@@ -582,8 +585,9 @@ const PuntoVentaPage: React.FC = () => {
           precio: precioFinal,
           precio_usd: precioFinal,
           precio_unitario: precioFinal,
-          cantidad: item.cantidad || item.existencia || item.stock || 0,
-          stock: item.cantidad || item.existencia || item.stock || 0,
+          existencia: existencia, // ✅ Campo principal según instrucciones
+          cantidad: existencia, // Mantener compatibilidad
+          stock: existencia, // Mantener compatibilidad
           lotes: item.lotes || [],
           sucursal: sucursalSeleccionada?.id || ""
         };
@@ -1102,8 +1106,9 @@ const PuntoVentaPage: React.FC = () => {
     }
     
     // Validar que la nueva cantidad no exceda la existencia disponible
+    // ✅ Prioridad: existencia > cantidad > stock (según instrucciones del backend)
     const item = carrito[index];
-    const existenciaDisponible = item.producto.cantidad ?? item.producto.existencia ?? item.producto.stock ?? 0;
+    const existenciaDisponible = item.producto.existencia ?? item.producto.cantidad ?? item.producto.stock ?? 0;
     
     if (nuevaCantidad > existenciaDisponible) {
       alert(`No hay suficiente existencia disponible. Existencia disponible: ${existenciaDisponible}`);
@@ -2756,8 +2761,8 @@ const PuntoVentaPage: React.FC = () => {
                     return existenciaB > existenciaA ? 1 : -1;
                   })
                   .map((producto) => {
-                  // ✅ Usar existencia del inventario (cantidad o existencia, no stock)
-                  const existencia = producto.cantidad ?? producto.existencia ?? producto.stock ?? 0;
+                  // ✅ Prioridad: existencia > cantidad > stock (según instrucciones del backend)
+                  const existencia = producto.existencia ?? producto.cantidad ?? producto.stock ?? 0;
                   const tieneExistencia = existencia > 0;
                   const mostrarExistencia = productoConStockAbierto === producto.id;
                   
@@ -2881,7 +2886,8 @@ const PuntoVentaPage: React.FC = () => {
                                   {producto.stock_por_sucursal && producto.stock_por_sucursal.length > 0 ? (
                                     <div className="space-y-2">
                                       {producto.stock_por_sucursal.map((stockSucursal, index) => {
-                                        const existenciaSuc = stockSucursal.cantidad ?? stockSucursal.existencia ?? stockSucursal.stock ?? 0;
+                                        // ✅ Prioridad: existencia > cantidad > stock (según instrucciones del backend)
+                                        const existenciaSuc = stockSucursal.existencia ?? stockSucursal.cantidad ?? stockSucursal.stock ?? 0;
                                         const esSucursalActual = stockSucursal.sucursal_id === sucursalSeleccionada?.id;
                                         
                                         // Obtener el nombre de la sucursal: primero del objeto, si no existe buscar en la lista de sucursales
