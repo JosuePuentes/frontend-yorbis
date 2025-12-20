@@ -33,6 +33,7 @@ interface StockPorSucursal {
   sucursal_id: string;
   sucursal_nombre: string;
   cantidad: number;
+  existencia?: number; // Existencia del inventario
   stock?: number; // Alias para compatibilidad
 }
 
@@ -49,11 +50,12 @@ interface Producto {
   precio_usd?: number;
   precio_unitario?: number; // Alternativa del backend
   precio_venta?: number; // Alternativa del backend
-  stock?: number;
-  cantidad?: number; // Stock total en la sucursal actual (suma de lotes)
+  stock?: number; // Alias para compatibilidad
+  cantidad?: number; // Existencia total en la sucursal actual (suma de lotes)
+  existencia?: number; // Existencia del inventario (prioridad sobre stock)
   lotes?: Lote[]; // Array de lotes con fechas de vencimiento
   sucursal?: string;
-  stock_por_sucursal?: StockPorSucursal[]; // Stock en todas las sucursales
+  stock_por_sucursal?: StockPorSucursal[]; // Existencia en todas las sucursales
 }
 
 interface ItemCarrito {
