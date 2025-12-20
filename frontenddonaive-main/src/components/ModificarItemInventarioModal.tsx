@@ -63,7 +63,7 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
   const [costo, setCosto] = useState<number>(0);
   const [existencia, setExistencia] = useState<number>(0);
   const [precio, setPrecio] = useState<number>(0);
-  const [porcentajeGanancia, setPorcentajeGanancia] = useState<number>(0);
+  const [porcentajeGanancia, setPorcentajeGanancia] = useState<number>(40.0); // Default 40%
   const [lotes, setLotes] = useState<Lote[]>([]);
 
   // Cargar todos los productos de la sucursal al abrir el modal
@@ -94,12 +94,21 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
         setCosto(itemEncontrado.costo_unitario || itemEncontrado.costo || 0);
         setExistencia(itemEncontrado.cantidad || itemEncontrado.existencia || 0);
         setPrecio(itemEncontrado.precio_unitario || itemEncontrado.precio || 0);
-        // Calcular porcentaje de ganancia
-        const costoItem = itemEncontrado.costo_unitario || itemEncontrado.costo || 0;
-        const precioItem = itemEncontrado.precio_unitario || itemEncontrado.precio || 0;
-        if (costoItem > 0 && precioItem > costoItem) {
-          const porcentaje = ((precioItem - costoItem) / costoItem) * 100;
-          setPorcentajeGanancia(porcentaje);
+        // Calcular porcentaje de ganancia - usar 40% por defecto si no viene
+        const porcentajeExistente = itemEncontrado.porcentaje_ganancia || itemEncontrado.utilidad_porcentaje || itemEncontrado.porcentaje_utilidad || 0;
+        if (porcentajeExistente > 0) {
+          setPorcentajeGanancia(porcentajeExistente);
+        } else {
+          // Si no hay porcentaje, calcular desde precio y costo, o usar 40% por defecto
+          const costoItem = itemEncontrado.costo_unitario || itemEncontrado.costo || 0;
+          const precioItem = itemEncontrado.precio_unitario || itemEncontrado.precio || 0;
+          if (costoItem > 0 && precioItem > costoItem) {
+            const porcentaje = ((precioItem - costoItem) / costoItem) * 100;
+            setPorcentajeGanancia(porcentaje);
+          } else {
+            // ✅ Usar 40% por defecto si no se puede calcular
+            setPorcentajeGanancia(40.0);
+          }
         }
         setLotes(itemEncontrado.lotes || []);
       }
@@ -275,6 +284,7 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
           costo: item.costo_unitario || item.costo || 0, // Mantener ambos para compatibilidad
           cantidad: item.cantidad || item.existencia || 0,
           existencia: item.cantidad || item.existencia || 0, // Mantener ambos para compatibilidad
+          porcentaje_ganancia: item.porcentaje_ganancia || item.utilidad_porcentaje || item.porcentaje_utilidad || 40.0, // ✅ 40% por defecto
           lotes: item.lotes || [], // Incluir lotes del backend
           sucursal: item.sucursal || sucursalId
         };
@@ -314,14 +324,17 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
     // Cargar lotes del producto
     setLotes(producto.lotes || []);
     
-    // Calcular porcentaje de ganancia inicial (utilidad contable)
-    // Fórmula inversa: % Ganancia = (1 - Costo / Precio) × 100
-    // Ejemplo: Costo = $8, Precio = $13.33 → % = (1 - 8/13.33) × 100 = 40%
-    if (costo > 0 && precio > 0 && precio > costo) {
-      const porcentaje = (1 - costo / precio) * 100;
+    // Calcular porcentaje de ganancia inicial - usar 40% por defecto si no viene
+    const porcentajeExistente = producto.porcentaje_ganancia || producto.utilidad_porcentaje || producto.porcentaje_utilidad || 0;
+    if (porcentajeExistente > 0) {
+      setPorcentajeGanancia(porcentajeExistente);
+    } else if (costo > 0 && precio > 0 && precio > costo) {
+      // Calcular desde precio y costo si no viene porcentaje
+      const porcentaje = ((precio - costo) / costo) * 100;
       setPorcentajeGanancia(Number(porcentaje.toFixed(2)));
     } else {
-      setPorcentajeGanancia(0);
+      // ✅ Usar 40% por defecto si no se puede calcular
+      setPorcentajeGanancia(40.0);
     }
     
     setSearchTerm("");

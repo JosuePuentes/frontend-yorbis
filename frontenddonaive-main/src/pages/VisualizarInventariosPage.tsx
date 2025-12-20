@@ -928,6 +928,7 @@ const VisualizarInventariosPage: React.FC = () => {
                     </th>
                     <th scope="col" className="px-5 py-3.5 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">
                       Utilidad (%)
+                      <div className="text-xs font-normal text-green-600 mt-1">Meta: 40%</div>
                     </th>
                     <th scope="col" className="px-5 py-3.5 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">
                       Existencia
@@ -940,19 +941,14 @@ const VisualizarInventariosPage: React.FC = () => {
                 <tbody className="bg-white divide-y divide-slate-200">
                   {itemsInventarios.map((item: any, index: number) => {
                     const costo = Number(item.costo_unitario || item.costo || 0);
-                    const precio = Number(item.precio_unitario || item.precio || 0);
-                    const utilidad = Number(item.utilidad || (precio - costo));
-                    const utilidadPorcentaje = Number(item.utilidad_porcentaje || item.porcentaje_ganancia || 0);
+                    const utilidadPorcentaje = Number(item.utilidad_porcentaje || item.porcentaje_ganancia || item.porcentaje_utilidad || 0);
                     const cantidad = Number(item.cantidad || item.existencia || 0);
                     
-                    // Calcular porcentaje de ganancia si no viene
+                    // ✅ Calcular porcentaje de ganancia - SIEMPRE usar 40% por defecto si no viene
                     let porcentajeGanancia = utilidadPorcentaje;
-                    if (porcentajeGanancia === 0 && utilidad > 0 && costo > 0) {
-                      porcentajeGanancia = (utilidad / costo) * 100;
-                    } else if (porcentajeGanancia === 0 && precio > costo && costo > 0) {
-                      porcentajeGanancia = ((precio - costo) / costo) * 100;
-                    } else if (porcentajeGanancia === 0 && costo > 0) {
-                      porcentajeGanancia = 40.0; // Default 40%
+                    if (porcentajeGanancia === 0 || porcentajeGanancia === null || porcentajeGanancia === undefined) {
+                      // Si no hay porcentaje definido, usar 40% por defecto
+                      porcentajeGanancia = 40.0;
                     }
                     
                     return (
@@ -978,21 +974,16 @@ const VisualizarInventariosPage: React.FC = () => {
                           ${costo.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td className="px-5 py-4 whitespace-nowrap text-sm text-right">
-                          <div className="flex flex-col items-end">
-                            <span className="text-green-600 font-semibold">
-                              ${utilidad.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                            <span className={`text-xs font-bold ${
-                              Math.abs(porcentajeGanancia - 40.0) < 0.01 
-                                ? 'text-green-700 bg-green-100 px-2 py-0.5 rounded' 
-                                : porcentajeGanancia > 40.0 
-                                  ? 'text-blue-600' 
-                                  : 'text-orange-600'
-                            }`}>
-                              {porcentajeGanancia.toFixed(2)}%
-                              {Math.abs(porcentajeGanancia - 40.0) < 0.01 && ' ✓'}
-                            </span>
-                          </div>
+                          <span className={`text-base font-bold ${
+                            Math.abs(porcentajeGanancia - 40.0) < 0.01 
+                              ? 'text-green-700 bg-green-100 px-3 py-1 rounded' 
+                              : porcentajeGanancia > 40.0 
+                                ? 'text-blue-600' 
+                                : 'text-orange-600'
+                          }`}>
+                            {porcentajeGanancia.toFixed(2)}%
+                            {Math.abs(porcentajeGanancia - 40.0) < 0.01 && ' ✓'}
+                          </span>
                         </td>
                         <td className="px-5 py-4 whitespace-nowrap text-sm text-slate-700 text-right font-semibold">
                           {cantidad.toLocaleString('es-VE')}
