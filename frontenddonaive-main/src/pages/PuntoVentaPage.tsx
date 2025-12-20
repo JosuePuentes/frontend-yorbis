@@ -1099,14 +1099,14 @@ const PuntoVentaPage: React.FC = () => {
       return;
     }
     
-    // Validar que la nueva cantidad no exceda el stock disponible
+    // Validar que la nueva cantidad no exceda la existencia disponible
     const item = carrito[index];
-    const stockDisponible = item.producto.cantidad ?? item.producto.stock ?? 0;
+    const existenciaDisponible = item.producto.cantidad ?? item.producto.existencia ?? item.producto.stock ?? 0;
     
-    if (nuevaCantidad > stockDisponible) {
-      alert(`No hay suficiente stock disponible. Stock disponible: ${stockDisponible}`);
-      // Limitar al stock disponible
-      nuevaCantidad = stockDisponible;
+    if (nuevaCantidad > existenciaDisponible) {
+      alert(`No hay suficiente existencia disponible. Existencia disponible: ${existenciaDisponible}`);
+      // Limitar a la existencia disponible
+      nuevaCantidad = existenciaDisponible;
     }
     
     setCarrito(
@@ -2743,20 +2743,21 @@ const PuntoVentaPage: React.FC = () => {
               <div className="mt-2 space-y-1 max-h-96 overflow-y-auto border rounded-lg p-2">
                 {[...productosEncontrados]
                   .sort((a, b) => {
-                    // Ordenar: primero los que tienen stock, luego los que no tienen
-                    const stockA = a.cantidad ?? a.stock ?? 0;
-                    const stockB = b.cantidad ?? b.stock ?? 0;
-                    // Si ambos tienen stock o ambos no tienen, mantener orden original
-                    if ((stockA > 0 && stockB > 0) || (stockA === 0 && stockB === 0)) {
+                    // Ordenar: primero los que tienen existencia, luego los que no tienen
+                    const existenciaA = a.cantidad ?? a.existencia ?? a.stock ?? 0;
+                    const existenciaB = b.cantidad ?? b.existencia ?? b.stock ?? 0;
+                    // Si ambos tienen existencia o ambos no tienen, mantener orden original
+                    if ((existenciaA > 0 && existenciaB > 0) || (existenciaA === 0 && existenciaB === 0)) {
                       return 0;
                     }
-                    // Los que tienen stock van primero
-                    return stockB > stockA ? 1 : -1;
+                    // Los que tienen existencia van primero
+                    return existenciaB > existenciaA ? 1 : -1;
                   })
                   .map((producto) => {
-                  const stock = producto.cantidad ?? producto.stock ?? 0;
-                  const tieneStock = stock > 0;
-                  const mostrarStock = productoConStockAbierto === producto.id;
+                  // ✅ Usar existencia del inventario (cantidad o existencia, no stock)
+                  const existencia = producto.cantidad ?? producto.existencia ?? producto.stock ?? 0;
+                  const tieneExistencia = existencia > 0;
+                  const mostrarExistencia = productoConStockAbierto === producto.id;
                   
                   // Obtener el primer lote para mostrar al lado de la descripción
                   const primerLote = producto.lotes && producto.lotes.length > 0 ? producto.lotes[0] : null;
@@ -2796,9 +2797,9 @@ const PuntoVentaPage: React.FC = () => {
                       <div className="flex items-start justify-between gap-2">
                         <button
                           onClick={() => handleSeleccionarProducto(producto)}
-                          disabled={!tieneStock}
+                          disabled={!tieneExistencia}
                           className={`flex-1 text-left min-w-0 ${
-                            tieneStock 
+                            tieneExistencia 
                               ? 'cursor-pointer hover:bg-blue-50' 
                               : 'cursor-not-allowed opacity-50'
                           }`}
@@ -2851,7 +2852,7 @@ const PuntoVentaPage: React.FC = () => {
                           </div>
                         </button>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          {/* Stock con dropdown */}
+                          {/* Existencia con dropdown */}
                           <div className="relative stock-dropdown-container">
                             <button
                               onClick={(e) => {
@@ -2861,24 +2862,24 @@ const PuntoVentaPage: React.FC = () => {
                                 );
                               }}
                               className={`px-2 py-1 rounded text-sm font-medium ${
-                                tieneStock 
+                                tieneExistencia 
                                   ? 'bg-green-100 text-green-700 hover:bg-green-200' 
                                   : 'bg-red-100 text-red-700 hover:bg-red-200'
                               }`}
                             >
-                              Stock: {stock}
+                              Existencia: {existencia}
                             </button>
-                            {/* Dropdown de stock por sucursal */}
-                            {mostrarStock && (
+                            {/* Dropdown de existencia por sucursal */}
+                            {mostrarExistencia && (
                               <div className="absolute right-0 mt-1 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-64 overflow-y-auto">
                                 <div className="p-3">
                                   <div className="text-sm font-semibold text-gray-700 mb-3">
-                                    Stock por Sucursal:
+                                    Existencia por Sucursal:
                                   </div>
                                   {producto.stock_por_sucursal && producto.stock_por_sucursal.length > 0 ? (
                                     <div className="space-y-2">
                                       {producto.stock_por_sucursal.map((stockSucursal, index) => {
-                                        const stockSuc = stockSucursal.cantidad ?? stockSucursal.stock ?? 0;
+                                        const existenciaSuc = stockSucursal.cantidad ?? stockSucursal.existencia ?? stockSucursal.stock ?? 0;
                                         const esSucursalActual = stockSucursal.sucursal_id === sucursalSeleccionada?.id;
                                         
                                         // Obtener el nombre de la sucursal: primero del objeto, si no existe buscar en la lista de sucursales

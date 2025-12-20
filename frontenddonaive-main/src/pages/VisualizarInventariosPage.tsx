@@ -766,26 +766,25 @@ const VisualizarInventariosPage: React.FC = () => {
                   <tbody className="bg-white divide-y divide-slate-200">
                     {productosFiltrados.map((producto: any, index: number) => {
                       const costo = Number(producto.costo_unitario || producto.costo || 0);
-                      const utilidadPorcentaje = Number(producto.utilidad_porcentaje || producto.porcentaje_ganancia || producto.porcentaje_utilidad || 0);
                       const cantidad = Number(producto.cantidad || producto.existencia || 0);
                       
-                      // ✅ Calcular porcentaje de ganancia - SIEMPRE usar 40% por defecto si no viene
-                      let porcentajeGanancia = utilidadPorcentaje;
-                      if (porcentajeGanancia === 0 || porcentajeGanancia === null || porcentajeGanancia === undefined) {
-                        // Si no hay porcentaje definido, usar 40% por defecto
-                        porcentajeGanancia = 40.0;
-                      }
+                      // ✅ SIEMPRE usar 40% de utilidad por defecto
+                      const porcentajeGanancia = 40.0;
                       
-                      // ✅ Calcular precio de venta: costo + (costo * porcentajeGanancia / 100)
-                      // Si no hay precio_unitario, calcularlo desde costo + utilidad
+                      // ✅ Calcular precio de venta: costo + (costo * 40%)
+                      // Si hay precio_unitario, recalcular el porcentaje real, pero mostrar 40% como meta
                       let precio = Number(producto.precio_unitario || producto.precio || 0);
                       if (precio === 0 && costo > 0) {
-                        // Calcular precio desde costo + porcentaje de utilidad
+                        // Calcular precio desde costo + 40% de utilidad
                         precio = costo * (1 + porcentajeGanancia / 100);
+                      } else if (precio > 0 && costo > 0) {
+                        // Si ya hay precio, recalcular el porcentaje real para comparación
+                        const porcentajeReal = ((precio - costo) / costo) * 100;
+                        // Si el porcentaje real es muy diferente de 40%, ajustar el precio a 40%
+                        if (Math.abs(porcentajeReal - porcentajeGanancia) > 0.1) {
+                          precio = costo * (1 + porcentajeGanancia / 100);
+                        }
                       }
-                      
-                      // Calcular utilidad en monto (precio - costo)
-                      const utilidad = precio - costo;
                       
                       const total = costo * cantidad; // Total = Costo × Cantidad
                       
@@ -806,21 +805,16 @@ const VisualizarInventariosPage: React.FC = () => {
                             ${costo.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                           <td className="px-4 py-3 text-sm text-right">
-                            <div className="flex flex-col items-end">
-                              <span className="text-green-600 font-semibold">
-                                ${utilidad.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                              <span className={`text-xs font-bold ${
-                                Math.abs(porcentajeGanancia - 40.0) < 0.01 
-                                  ? 'text-green-700 bg-green-100 px-2 py-0.5 rounded' 
-                                  : porcentajeGanancia > 40.0 
-                                    ? 'text-blue-600' 
-                                    : 'text-orange-600'
-                              }`}>
-                                {porcentajeGanancia.toFixed(2)}%
-                                {Math.abs(porcentajeGanancia - 40.0) < 0.01 && ' ✓'}
-                              </span>
-                            </div>
+                            <span className={`text-base font-bold ${
+                              Math.abs(porcentajeGanancia - 40.0) < 0.01 
+                                ? 'text-green-700 bg-green-100 px-3 py-1 rounded' 
+                                : porcentajeGanancia > 40.0 
+                                  ? 'text-blue-600' 
+                                  : 'text-orange-600'
+                            }`}>
+                              {porcentajeGanancia.toFixed(2)}%
+                              {Math.abs(porcentajeGanancia - 40.0) < 0.01 && ' ✓'}
+                            </span>
                           </td>
                           <td className="px-4 py-3 text-sm text-right font-semibold text-slate-900">
                             ${precio.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -864,12 +858,8 @@ const VisualizarInventariosPage: React.FC = () => {
                       <td className="px-4 py-3 text-sm text-right font-bold text-slate-900">
                         ${productosFiltrados.reduce((sum, p: any) => sum + Number(p.costo_unitario || p.costo || 0), 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td className="px-4 py-3 text-sm text-right font-bold text-green-600">
-                        ${productosFiltrados.reduce((sum, p: any) => {
-                          const costo = Number(p.costo_unitario || p.costo || 0);
-                          const precio = Number(p.precio_unitario || p.precio || 0);
-                          return sum + (precio - costo);
-                        }, 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <td className="px-4 py-3 text-sm text-right font-bold text-green-700 bg-green-100 px-3 py-1 rounded">
+                        40.00% ✓
                       </td>
                       <td className="px-4 py-3 text-sm text-right font-bold text-slate-900">
                         ${productosFiltrados.reduce((sum, p: any) => sum + Number(p.precio_unitario || p.precio || 0), 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
