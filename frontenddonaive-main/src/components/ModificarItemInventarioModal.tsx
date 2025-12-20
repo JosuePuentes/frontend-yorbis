@@ -358,6 +358,9 @@ const ModificarItemInventarioModal: React.FC<ModificarItemInventarioModalProps> 
       setPorcentajeGanancia(40.0);
     }
     
+    // ✅ Resetear aplicar tasa de cambio al seleccionar un producto
+    setAplicarTasaCambio(false);
+    
     setSearchTerm("");
     setProductos([]);
   };
